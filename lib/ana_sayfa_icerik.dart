@@ -87,7 +87,7 @@ class _AnaSayfaIcerikState extends State<AnaSayfaIcerik> {
             height: 200,
             child: ListView.builder(
               scrollDirection: Axis.horizontal,
-              itemCount: 7,
+              itemCount: 5, // <<<<< BURAYI 5 YAPTIK!
               itemBuilder: (context, index) {
                 final weatherData = forecastList[index * 8];
                 DateTime date = DateTime.now().add(Duration(days: index));
