@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'status_bar.dart'; // Doğru import
 
 class KameraSayfasi extends StatelessWidget {
   const KameraSayfasi({super.key});
@@ -9,9 +8,6 @@ class KameraSayfasi extends StatelessWidget {
     return Scaffold(
       appBar: AppBar(
         title: const Text('Kamera Görüntüsü'),
-        actions: const [
-          StatusBar(),
-        ],
       ),
       body: const Center(
         child: Text(

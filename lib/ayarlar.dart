@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'status_bar.dart'; // Doğru import
 
 class Ayarlar extends StatelessWidget {
   const Ayarlar({super.key});
@@ -9,9 +8,6 @@ class Ayarlar extends StatelessWidget {
     return Scaffold(
       appBar: AppBar(
         title: const Text('Ayarlar'),
-        actions: const [
-          StatusBar(),
-        ],
       ),
       body: const Center(
         child: Text(
