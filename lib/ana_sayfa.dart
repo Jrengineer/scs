@@ -14,6 +14,7 @@ class _AnaSayfaState extends State<AnaSayfa> {
   int _selectedIndex = 0;
 
   final List<Widget> _pages = [
+    const AnaSayfaIcerik(), // Ana sayfa içeriği
     const ManuelKontrol(),
     const Ayarlar(),
     const KameraSayfasi(),
@@ -23,7 +24,7 @@ class _AnaSayfaState extends State<AnaSayfa> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Ana Sayfa'),
+        title: const Text('Solar Panel Temizlik Robotu'),
       ),
       drawer: Drawer(
         child: ListView(
@@ -36,11 +37,21 @@ class _AnaSayfaState extends State<AnaSayfa> {
               child: Text('Menü', style: TextStyle(color: Colors.white, fontSize: 24)),
             ),
             ListTile(
+              leading: const Icon(Icons.home),
+              title: const Text('Ana Sayfa'),
+              onTap: () {
+                setState(() {
+                  _selectedIndex = 0;
+                });
+                Navigator.pop(context);
+              },
+            ),
+            ListTile(
               leading: const Icon(Icons.gamepad),
               title: const Text('Manuel Kontrol'),
               onTap: () {
                 setState(() {
-                  _selectedIndex = 0;
+                  _selectedIndex = 1;
                 });
                 Navigator.pop(context);
               },
@@ -50,7 +61,7 @@ class _AnaSayfaState extends State<AnaSayfa> {
               title: const Text('Ayarlar'),
               onTap: () {
                 setState(() {
-                  _selectedIndex = 1;
+                  _selectedIndex = 2;
                 });
                 Navigator.pop(context);
               },
@@ -60,7 +71,7 @@ class _AnaSayfaState extends State<AnaSayfa> {
               title: const Text('Kamera Görüntüsü'),
               onTap: () {
                 setState(() {
-                  _selectedIndex = 2;
+                  _selectedIndex = 3;
                 });
                 Navigator.pop(context);
               },
@@ -69,6 +80,20 @@ class _AnaSayfaState extends State<AnaSayfa> {
         ),
       ),
       body: _pages[_selectedIndex],
+    );
+  }
+}
+
+class AnaSayfaIcerik extends StatelessWidget {
+  const AnaSayfaIcerik({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return const Center(
+      child: Text(
+        'Ana Sayfa İçeriği',
+        style: TextStyle(fontSize: 24),
+      ),
     );
   }
 }
