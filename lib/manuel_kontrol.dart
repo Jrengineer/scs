@@ -57,7 +57,7 @@ class _ManuelKontrolState extends State<ManuelKontrol> {
       _tcpSocket = await Socket.connect('192.168.1.130', 5000);
       _tcpSocket!.listen(_onCameraData, onDone: _onCameraDone, onError: _onCameraError);
     } catch (e) {
-      print('TCP Bağlantı hatası: $e');
+      print('TCP bağlantı hatası: $e');
     }
   }
 
@@ -101,7 +101,7 @@ class _ManuelKontrolState extends State<ManuelKontrol> {
     double cameraWidth = size.width * 0.6;
     double cameraHeight = size.height * 0.4;
     double cameraX = (size.width - cameraWidth) / 2;
-    double cameraY = (size.height - cameraHeight) / 2 - 50; // biraz daha yukarı almak için -50 verdim
+    double cameraY = (size.height - cameraHeight) / 2 - 100; // YUKARI aldım (-100)
 
     _cameraArea = Rect.fromLTWH(cameraX, cameraY, cameraWidth, cameraHeight);
 
@@ -204,8 +204,8 @@ class _ManuelKontrolState extends State<ManuelKontrol> {
           _buildJoystickLayer(size),
           _buildSpeedSlider(),
           Positioned(
-            top: 8,
-            right: 8,
+            bottom: 16,
+            right: 16,
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.end,
               children: [
@@ -268,24 +268,26 @@ class _ManuelKontrolState extends State<ManuelKontrol> {
 
   Widget _buildSpeedSlider() {
     return Positioned(
-      bottom: 16,
+      bottom: 70,
       left: 16,
-      right: 16,
       child: Column(
-        crossAxisAlignment: CrossAxisAlignment.center,
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           const Text('Hız Limiti', style: TextStyle(color: Colors.white, fontSize: 16)),
-          Slider(
-            value: _speed,
-            min: 10,
-            max: 100,
-            divisions: 9,
-            label: '${_speed.round()}%',
-            onChanged: (value) {
-              setState(() {
-                _speed = value;
-              });
-            },
+          SizedBox(
+            width: 200,
+            child: Slider(
+              value: _speed,
+              min: 10,
+              max: 100,
+              divisions: 9,
+              label: '${_speed.round()}%',
+              onChanged: (value) {
+                setState(() {
+                  _speed = value;
+                });
+              },
+            ),
           ),
           Text('Seçili: ${_speed.round()}%', style: const TextStyle(color: Colors.white, fontSize: 14)),
         ],
