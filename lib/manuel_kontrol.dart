@@ -13,7 +13,6 @@ class ManuelKontrol extends StatefulWidget {
 }
 
 class _ManuelKontrolState extends State<ManuelKontrol> {
-  // UDP ve joystick için
   RawDatagramSocket? _udpSocket;
   final String _targetIP = '192.168.1.130';
   final int _targetPort = 8888;
@@ -21,10 +20,7 @@ class _ManuelKontrolState extends State<ManuelKontrol> {
   Map<int, Offset> _touchCurrentPoints = {};
   double _speed = 50;
   Timer? _sendTimer;
-  late Rect _leftJoystickArea;
-  late Rect _rightJoystickArea;
 
-  // TCP kamera için
   Socket? _tcpSocket;
   Uint8List? _cameraImageBytes;
   List<int> _cameraBuffer = [];
@@ -33,6 +29,10 @@ class _ManuelKontrolState extends State<ManuelKontrol> {
   int _latencyMs = 0;
   Timer? _fpsTimer;
   int _lastFrameTime = 0;
+
+  Rect? _leftJoystickArea;
+  Rect? _rightJoystickArea;
+  Rect? _cameraArea;
 
   @override
   void initState() {
@@ -97,15 +97,23 @@ class _ManuelKontrolState extends State<ManuelKontrol> {
     _tcpSocket?.destroy();
   }
 
-  void _calculateJoystickAreas(Size size) {
-    final colWidth = size.width / 3;
-    final rowHeight = size.height / 3;
-    _leftJoystickArea = Rect.fromLTWH(0, 0, colWidth, rowHeight); // Üst Sol
-    _rightJoystickArea = Rect.fromLTWH(colWidth * 2, 0, colWidth, rowHeight); // Üst Sağ
+  void _calculateAreas(Size size) {
+    double cameraWidth = size.width * 0.6;
+    double cameraHeight = size.height * 0.4;
+    double cameraX = (size.width - cameraWidth) / 2;
+    double cameraY = (size.height - cameraHeight) / 2 - 50; // biraz daha yukarı almak için -50 verdim
+
+    _cameraArea = Rect.fromLTWH(cameraX, cameraY, cameraWidth, cameraHeight);
+
+    _leftJoystickArea = Rect.fromLTWH(0, cameraY, cameraX, cameraHeight);
+    _rightJoystickArea = Rect.fromLTWH(cameraX + cameraWidth, cameraY, cameraX, cameraHeight);
   }
 
   bool _isInJoystickArea(Offset position) {
-    return _leftJoystickArea.contains(position) || _rightJoystickArea.contains(position);
+    if (_cameraArea != null && _cameraArea!.contains(position)) {
+      return false;
+    }
+    return (_leftJoystickArea?.contains(position) ?? false) || (_rightJoystickArea?.contains(position) ?? false);
   }
 
   void _sendData() {
@@ -125,9 +133,9 @@ class _ManuelKontrolState extends State<ManuelKontrol> {
       final start = _touchStartPoints[pointer];
       if (start != null && _isInJoystickArea(start)) {
         validTouchExists = true;
-        if (_leftJoystickArea.contains(start)) {
+        if (_leftJoystickArea!.contains(start)) {
           forwardBackward = (start.dy - currentPosition.dy) / 100;
-        } else if (_rightJoystickArea.contains(start)) {
+        } else if (_rightJoystickArea!.contains(start)) {
           leftRight = (currentPosition.dx - start.dx) / 100;
         }
       }
@@ -173,7 +181,7 @@ class _ManuelKontrolState extends State<ManuelKontrol> {
   @override
   Widget build(BuildContext context) {
     final size = MediaQuery.of(context).size;
-    _calculateJoystickAreas(size);
+    _calculateAreas(size);
 
     return Scaffold(
       appBar: AppBar(
@@ -181,15 +189,19 @@ class _ManuelKontrolState extends State<ManuelKontrol> {
       ),
       body: Stack(
         children: [
-          Positioned.fill(
-            child: _cameraImageBytes != null
-                ? Image.memory(
-              _cameraImageBytes!,
-              gaplessPlayback: true,
-              fit: BoxFit.contain,
-            )
-                : const Center(child: CircularProgressIndicator()),
-          ),
+          if (_cameraImageBytes != null)
+            Positioned(
+              left: _cameraArea!.left,
+              top: _cameraArea!.top,
+              width: _cameraArea!.width,
+              height: _cameraArea!.height,
+              child: Image.memory(
+                _cameraImageBytes!,
+                fit: BoxFit.contain,
+                gaplessPlayback: true,
+              ),
+            ),
+          _buildJoystickLayer(size),
           _buildSpeedSlider(),
           Positioned(
             top: 8,
@@ -202,78 +214,78 @@ class _ManuelKontrolState extends State<ManuelKontrol> {
               ],
             ),
           ),
-          Positioned.fill(
-            top: 100,
-            child: Listener(
-              onPointerDown: (details) {
-                if (_isInJoystickArea(details.localPosition)) {
-                  setState(() {
-                    _touchStartPoints[details.pointer] = details.localPosition;
-                    _touchCurrentPoints[details.pointer] = details.localPosition;
-                  });
-                }
-              },
-              onPointerMove: (details) {
-                if (_touchStartPoints.containsKey(details.pointer)) {
-                  setState(() {
-                    _touchCurrentPoints[details.pointer] = _limitMovement(
-                      _touchStartPoints[details.pointer]!,
-                      details.localPosition,
-                      100,
-                    );
-                  });
-                }
-              },
-              onPointerUp: (details) {
-                setState(() {
-                  _touchStartPoints.remove(details.pointer);
-                  _touchCurrentPoints.remove(details.pointer);
-                });
-              },
-              onPointerCancel: (details) {
-                setState(() {
-                  _touchStartPoints.remove(details.pointer);
-                  _touchCurrentPoints.remove(details.pointer);
-                });
-              },
-              child: CustomPaint(
-                size: Size.infinite,
-                painter: JoystickPainter(
-                  startPoints: _touchStartPoints,
-                  currentPoints: _touchCurrentPoints,
-                  leftJoystickArea: _leftJoystickArea,
-                  rightJoystickArea: _rightJoystickArea,
-                ),
-              ),
-            ),
-          ),
         ],
+      ),
+    );
+  }
+
+  Widget _buildJoystickLayer(Size size) {
+    return Positioned.fill(
+      child: Listener(
+        onPointerDown: (details) {
+          if (_isInJoystickArea(details.localPosition)) {
+            setState(() {
+              _touchStartPoints[details.pointer] = details.localPosition;
+              _touchCurrentPoints[details.pointer] = details.localPosition;
+            });
+          }
+        },
+        onPointerMove: (details) {
+          if (_touchStartPoints.containsKey(details.pointer)) {
+            setState(() {
+              _touchCurrentPoints[details.pointer] = _limitMovement(
+                _touchStartPoints[details.pointer]!,
+                details.localPosition,
+                100,
+              );
+            });
+          }
+        },
+        onPointerUp: (details) {
+          setState(() {
+            _touchStartPoints.remove(details.pointer);
+            _touchCurrentPoints.remove(details.pointer);
+          });
+        },
+        onPointerCancel: (details) {
+          setState(() {
+            _touchStartPoints.remove(details.pointer);
+            _touchCurrentPoints.remove(details.pointer);
+          });
+        },
+        child: CustomPaint(
+          size: Size.infinite,
+          painter: JoystickPainter(
+            startPoints: _touchStartPoints,
+            currentPoints: _touchCurrentPoints,
+            leftJoystickArea: _leftJoystickArea!,
+            rightJoystickArea: _rightJoystickArea!,
+          ),
+        ),
       ),
     );
   }
 
   Widget _buildSpeedSlider() {
     return Positioned(
-      top: 70,
+      bottom: 16,
       left: 16,
+      right: 16,
       child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
+        crossAxisAlignment: CrossAxisAlignment.center,
         children: [
           const Text('Hız Limiti', style: TextStyle(color: Colors.white, fontSize: 16)),
-          SizedBox(
-            width: 150,
-            child: Slider(
-              value: _speed,
-              min: 10,
-              max: 100,
-              divisions: 9,
-              label: '${_speed.round()}%',
-              onChanged: (value) {
-                setState(() {
-                  _speed = value;
-                });
-              },
-            ),
+          Slider(
+            value: _speed,
+            min: 10,
+            max: 100,
+            divisions: 9,
+            label: '${_speed.round()}%',
+            onChanged: (value) {
+              setState(() {
+                _speed = value;
+              });
+            },
           ),
           Text('Seçili: ${_speed.round()}%', style: const TextStyle(color: Colors.white, fontSize: 14)),
         ],
