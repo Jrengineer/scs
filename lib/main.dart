@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'ana_sayfa.dart'; // Çok sayfalı sistem (BURGER MENÜLÜ AnaSayfa)
+import 'ana_sayfa.dart'; // Çok sayfalı AnaSayfa açılacak
 
 void main() {
   runApp(const MyApp());

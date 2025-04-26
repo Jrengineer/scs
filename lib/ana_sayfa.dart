@@ -3,7 +3,7 @@ import 'manuel_kontrol.dart';
 import 'ayarlar.dart';
 import 'kamera_sayfasi.dart';
 import 'ana_sayfa_icerik.dart';
-import 'status_bar.dart'; // Eklendi
+import 'status_bar.dart'; // Doğru tek import
 
 class AnaSayfa extends StatefulWidget {
   const AnaSayfa({super.key});
@@ -28,7 +28,7 @@ class _AnaSayfaState extends State<AnaSayfa> {
       appBar: AppBar(
         title: const Text('Solar Panel Temizlik Robotu'),
         actions: const [
-          StatusBar(), // Sağ üstte şarj ve bağlantı durumu
+          StatusBar(),
         ],
       ),
       drawer: Drawer(

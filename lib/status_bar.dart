@@ -13,12 +13,11 @@ class StatusBar extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Row(
-      mainAxisAlignment: MainAxisAlignment.end,
       children: [
         Icon(
           isConnected ? Icons.wifi : Icons.wifi_off,
           color: isConnected ? Colors.green : Colors.red,
-          size: 28,
+          size: 24,
         ),
         const SizedBox(width: 8),
         Icon(
@@ -30,7 +29,7 @@ class StatusBar extends StatelessWidget {
               ? Icons.battery_2_bar
               : Icons.battery_alert,
           color: batteryLevel >= 25 ? Colors.green : Colors.red,
-          size: 28,
+          size: 24,
         ),
         const SizedBox(width: 12),
       ],
