@@ -22,6 +22,8 @@ class _KameraSayfasiState extends State<KameraSayfasi> {
   int _lastFrameTime = 0;
   int _latencyMs = 0;
 
+  final List<int> _buffer = [];
+
   @override
   void initState() {
     super.initState();
@@ -55,31 +57,28 @@ class _KameraSayfasiState extends State<KameraSayfasi> {
   }
 
   void _onData(Uint8List data) {
-    try {
-      final buffer = BytesBuilder();
-      int offset = 0;
+    _buffer.addAll(data);
 
-      while (offset + 4 <= data.length) {
-        int frameLength = data.buffer.asByteData(offset, 4).getUint32(0, Endian.big);
-        offset += 4;
+    while (_buffer.length >= 4) {
+      final lengthBytes = Uint8List.fromList(_buffer.sublist(0, 4));
+      final frameLength = ByteData.sublistView(lengthBytes).getUint32(0, Endian.big);
 
-        if (offset + frameLength > data.length) break;
-
-        final frameData = data.sublist(offset, offset + frameLength);
-        offset += frameLength;
-
-        final now = DateTime.now().millisecondsSinceEpoch;
-        final latency = now - _lastFrameTime;
-        _lastFrameTime = now;
-
-        setState(() {
-          _imageBytes = frameData;
-          _frameCounter++;
-          _latencyMs = latency;
-        });
+      if (_buffer.length < 4 + frameLength) {
+        break; // Tüm frame gelmemiş, bekle
       }
-    } catch (e) {
-      print('Veri işleme hatası: $e');
+
+      final frameData = _buffer.sublist(4, 4 + frameLength);
+      _buffer.removeRange(0, 4 + frameLength); // Kullanılan veriyi buffer'dan sil
+
+      final now = DateTime.now().millisecondsSinceEpoch;
+      final latency = _lastFrameTime == 0 ? 0 : now - _lastFrameTime;
+      _lastFrameTime = now;
+
+      setState(() {
+        _imageBytes = Uint8List.fromList(frameData);
+        _frameCounter++;
+        _latencyMs = latency;
+      });
     }
   }
 
