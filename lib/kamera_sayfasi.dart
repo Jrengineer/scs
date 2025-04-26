@@ -2,6 +2,8 @@ import 'dart:async';
 import 'dart:io';
 import 'dart:typed_data';
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
+import 'camera_service.dart';
 
 class KameraSayfasi extends StatefulWidget {
   const KameraSayfasi({super.key});
@@ -12,7 +14,6 @@ class KameraSayfasi extends StatefulWidget {
 
 class _KameraSayfasiState extends State<KameraSayfasi> {
   Socket? _socket;
-  Uint8List? _imageBytes;
   bool _connected = false;
 
   int _frameCounter = 0;
@@ -51,12 +52,13 @@ class _KameraSayfasiState extends State<KameraSayfasi> {
       setState(() {
         _connected = false;
       });
-      print('Bağlantı hatası: $e');
       Future.delayed(const Duration(seconds: 2), _connectToServer);
     }
   }
 
   void _onData(Uint8List data) {
+    final cameraService = Provider.of<CameraService>(context, listen: false);
+
     _buffer.addAll(data);
 
     while (_buffer.length >= 4) {
@@ -64,18 +66,19 @@ class _KameraSayfasiState extends State<KameraSayfasi> {
       final frameLength = ByteData.sublistView(lengthBytes).getUint32(0, Endian.big);
 
       if (_buffer.length < 4 + frameLength) {
-        break; // Tüm frame gelmemiş, bekle
+        break;
       }
 
       final frameData = _buffer.sublist(4, 4 + frameLength);
-      _buffer.removeRange(0, 4 + frameLength); // Kullanılan veriyi buffer'dan sil
+      _buffer.removeRange(0, 4 + frameLength);
 
       final now = DateTime.now().millisecondsSinceEpoch;
       final latency = _lastFrameTime == 0 ? 0 : now - _lastFrameTime;
       _lastFrameTime = now;
 
+      cameraService.updateCameraData(Uint8List.fromList(frameData), _fps, latency);
+
       setState(() {
-        _imageBytes = Uint8List.fromList(frameData);
         _frameCounter++;
         _latencyMs = latency;
       });
@@ -83,7 +86,7 @@ class _KameraSayfasiState extends State<KameraSayfasi> {
   }
 
   void _onDone() {
-    print('Bağlantı kapandı.');
+    print('Kamera bağlantısı kapandı.');
     setState(() {
       _connected = false;
     });
@@ -91,7 +94,7 @@ class _KameraSayfasiState extends State<KameraSayfasi> {
   }
 
   void _onError(error) {
-    print('Bağlantı hatası: $error');
+    print('Kamera bağlantı hatası: $error');
     setState(() {
       _connected = false;
     });
@@ -107,6 +110,8 @@ class _KameraSayfasiState extends State<KameraSayfasi> {
 
   @override
   Widget build(BuildContext context) {
+    final cameraService = Provider.of<CameraService>(context);
+
     return Scaffold(
       appBar: AppBar(
         title: const Text('Kamera Görüntüsü'),
@@ -118,9 +123,9 @@ class _KameraSayfasiState extends State<KameraSayfasi> {
             flex: 5,
             child: Center(
               child: _connected
-                  ? _imageBytes != null
+                  ? cameraService.imageBytes != null
                   ? Image.memory(
-                _imageBytes!,
+                cameraService.imageBytes!,
                 gaplessPlayback: true,
                 fit: BoxFit.contain,
                 width: MediaQuery.of(context).size.width * 0.9,
@@ -137,12 +142,12 @@ class _KameraSayfasiState extends State<KameraSayfasi> {
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
                 Text(
-                  'FPS: $_fps',
+                  'FPS: ${cameraService.fps}',
                   style: const TextStyle(fontSize: 20),
                 ),
                 const SizedBox(height: 10),
                 Text(
-                  'Gecikme: $_latencyMs ms',
+                  'Gecikme: ${cameraService.latencyMs} ms',
                   style: const TextStyle(fontSize: 20),
                 ),
               ],

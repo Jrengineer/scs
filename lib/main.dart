@@ -1,8 +1,17 @@
 import 'package:flutter/material.dart';
-import 'ana_sayfa.dart'; // Çok sayfalı AnaSayfa açılacak
+import 'package:provider/provider.dart';
+import 'camera_service.dart';
+import 'ana_sayfa.dart'; // senin ana menü sayfanın dosyası
 
 void main() {
-  runApp(const MyApp());
+  runApp(
+    MultiProvider(
+      providers: [
+        ChangeNotifierProvider(create: (_) => CameraService()),
+      ],
+      child: const MyApp(),
+    ),
+  );
 }
 
 class MyApp extends StatelessWidget {
@@ -11,10 +20,10 @@ class MyApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'Solar Panel Temizlik Robotu',
-      theme: ThemeData.dark(),
-      home: const AnaSayfa(),
       debugShowCheckedModeBanner: false,
+      title: 'SCS App',
+      theme: ThemeData.dark(), // İstersen light yapabilirsin
+      home: const AnaSayfa(), // Senin ana ekranın
     );
   }
 }

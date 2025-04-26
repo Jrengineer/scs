@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 import 'dart:math';
+import 'dart:typed_data';
 import 'package:flutter/material.dart';
 
 class ManuelKontrol extends StatefulWidget {
@@ -12,34 +13,93 @@ class ManuelKontrol extends StatefulWidget {
 }
 
 class _ManuelKontrolState extends State<ManuelKontrol> {
+  // UDP ve joystick için
   RawDatagramSocket? _udpSocket;
   final String _targetIP = '192.168.1.130';
   final int _targetPort = 8888;
-
   Map<int, Offset> _touchStartPoints = {};
   Map<int, Offset> _touchCurrentPoints = {};
-
   double _speed = 50;
   Timer? _sendTimer;
-
   late Rect _leftJoystickArea;
   late Rect _rightJoystickArea;
+
+  // TCP kamera için
+  Socket? _tcpSocket;
+  Uint8List? _cameraImageBytes;
+  List<int> _cameraBuffer = [];
+  int _fps = 0;
+  int _frameCounter = 0;
+  int _latencyMs = 0;
+  Timer? _fpsTimer;
+  int _lastFrameTime = 0;
 
   @override
   void initState() {
     super.initState();
     _initUdp();
+    _initTcp();
     _sendTimer = Timer.periodic(const Duration(milliseconds: 100), (_) => _sendData());
+    _fpsTimer = Timer.periodic(const Duration(seconds: 1), (_) {
+      setState(() {
+        _fps = _frameCounter;
+        _frameCounter = 0;
+      });
+    });
   }
 
   void _initUdp() async {
     _udpSocket = await RawDatagramSocket.bind(InternetAddress.anyIPv4, 0);
   }
 
+  void _initTcp() async {
+    try {
+      _tcpSocket = await Socket.connect('192.168.1.130', 5000);
+      _tcpSocket!.listen(_onCameraData, onDone: _onCameraDone, onError: _onCameraError);
+    } catch (e) {
+      print('TCP Bağlantı hatası: $e');
+    }
+  }
+
+  void _onCameraData(Uint8List data) {
+    _cameraBuffer.addAll(data);
+
+    while (_cameraBuffer.length >= 4) {
+      final byteData = ByteData.sublistView(Uint8List.fromList(_cameraBuffer));
+      final frameLength = byteData.getUint32(0, Endian.big);
+
+      if (_cameraBuffer.length < 4 + frameLength) {
+        break;
+      }
+
+      final frameData = _cameraBuffer.sublist(4, 4 + frameLength);
+      _cameraBuffer = _cameraBuffer.sublist(4 + frameLength);
+
+      final now = DateTime.now().millisecondsSinceEpoch;
+      final latency = _lastFrameTime == 0 ? 0 : now - _lastFrameTime;
+      _lastFrameTime = now;
+
+      setState(() {
+        _cameraImageBytes = Uint8List.fromList(frameData);
+        _latencyMs = latency;
+        _frameCounter++;
+      });
+    }
+  }
+
+  void _onCameraDone() {
+    print('Kamera bağlantısı kapandı.');
+    _tcpSocket?.destroy();
+  }
+
+  void _onCameraError(error) {
+    print('Kamera bağlantı hatası: $error');
+    _tcpSocket?.destroy();
+  }
+
   void _calculateJoystickAreas(Size size) {
     final colWidth = size.width / 3;
     final rowHeight = size.height / 3;
-
     _leftJoystickArea = Rect.fromLTWH(0, 0, colWidth, rowHeight); // Üst Sol
     _rightJoystickArea = Rect.fromLTWH(colWidth * 2, 0, colWidth, rowHeight); // Üst Sağ
   }
@@ -104,7 +164,9 @@ class _ManuelKontrolState extends State<ManuelKontrol> {
   @override
   void dispose() {
     _udpSocket?.close();
+    _tcpSocket?.destroy();
     _sendTimer?.cancel();
+    _fpsTimer?.cancel();
     super.dispose();
   }
 
@@ -119,7 +181,27 @@ class _ManuelKontrolState extends State<ManuelKontrol> {
       ),
       body: Stack(
         children: [
+          Positioned.fill(
+            child: _cameraImageBytes != null
+                ? Image.memory(
+              _cameraImageBytes!,
+              gaplessPlayback: true,
+              fit: BoxFit.contain,
+            )
+                : const Center(child: CircularProgressIndicator()),
+          ),
           _buildSpeedSlider(),
+          Positioned(
+            top: 8,
+            right: 8,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.end,
+              children: [
+                Text('FPS: $_fps', style: const TextStyle(color: Colors.white, fontSize: 16)),
+                Text('Gecikme: $_latencyMs ms', style: const TextStyle(color: Colors.white, fontSize: 16)),
+              ],
+            ),
+          ),
           Positioned.fill(
             top: 100,
             child: Listener(
@@ -172,12 +254,12 @@ class _ManuelKontrolState extends State<ManuelKontrol> {
 
   Widget _buildSpeedSlider() {
     return Positioned(
-      top: 16,
+      top: 70,
       left: 16,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Text('Hız Limiti', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+          const Text('Hız Limiti', style: TextStyle(color: Colors.white, fontSize: 16)),
           SizedBox(
             width: 150,
             child: Slider(
@@ -193,7 +275,7 @@ class _ManuelKontrolState extends State<ManuelKontrol> {
               },
             ),
           ),
-          Text('Seçili: ${_speed.round()}%', style: const TextStyle(fontSize: 14)),
+          Text('Seçili: ${_speed.round()}%', style: const TextStyle(color: Colors.white, fontSize: 14)),
         ],
       ),
     );
@@ -235,11 +317,9 @@ class JoystickPainter extends CustomPainter {
     final yellowPaint = Paint()..color = Colors.yellow.withOpacity(0.5);
     final orangePaint = Paint()..color = Colors.orange;
 
-    // Yeşil joystick alanlarını çiz
     canvas.drawRect(leftJoystickArea, greenPaint);
     canvas.drawRect(rightJoystickArea, greenPaint);
 
-    // Joystickler
     startPoints.forEach((pointer, start) {
       final current = currentPoints[pointer];
       if (current != null) {
