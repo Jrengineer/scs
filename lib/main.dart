@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'ana_sayfa.dart';
+import 'ana_sayfa_icerik.dart'; // Değişiklik burada
 
 void main() {
   runApp(const MyApp());
@@ -12,8 +12,8 @@ class MyApp extends StatelessWidget {
   Widget build(BuildContext context) {
     return MaterialApp(
       title: 'Solar Panel Temizlik Robotu',
-      theme: ThemeData.dark(),  // 🖤 Burayı koyu tema yaptım!
-      home: const AnaSayfa(),
+      theme: ThemeData.dark(),
+      home: const AnaSayfaIcerik(), // <<< BURASI DEĞİŞTİ
       debugShowCheckedModeBanner: false,
     );
   }
