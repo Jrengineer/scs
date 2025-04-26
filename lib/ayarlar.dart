@@ -13,3 +13,6 @@ class Ayarlar extends StatelessWidget {
     );
   }
 }
+actions: const [
+StatusBar(),
+],

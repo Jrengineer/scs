@@ -13,3 +13,6 @@ class KameraSayfasi extends StatelessWidget {
     );
   }
 }
+actions: const [
+StatusBar(),
+],

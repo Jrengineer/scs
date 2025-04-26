@@ -2,7 +2,8 @@ import 'package:flutter/material.dart';
 import 'manuel_kontrol.dart';
 import 'ayarlar.dart';
 import 'kamera_sayfasi.dart';
-import 'ana_sayfa_icerik.dart'; // AnaSayfa içeriği küçük kutulu hava durumu olacak
+import 'ana_sayfa_icerik.dart';
+import 'status_bar.dart'; // Eklendi
 
 class AnaSayfa extends StatefulWidget {
   const AnaSayfa({super.key});
@@ -15,10 +16,10 @@ class _AnaSayfaState extends State<AnaSayfa> {
   int _selectedIndex = 0;
 
   final List<Widget> _pages = [
-    const AnaSayfaIcerik(),  // Ana sayfa: küçük kaydırmalı hava durumu kutuları
-    const ManuelKontrol(),   // Manuel kontrol sayfası
-    const Ayarlar(),         // Ayarlar sayfası
-    const KameraSayfasi(),   // Kamera izleme sayfası
+    const AnaSayfaIcerik(),
+    const ManuelKontrol(),
+    const Ayarlar(),
+    const KameraSayfasi(),
   ];
 
   @override
@@ -26,6 +27,9 @@ class _AnaSayfaState extends State<AnaSayfa> {
     return Scaffold(
       appBar: AppBar(
         title: const Text('Solar Panel Temizlik Robotu'),
+        actions: const [
+          StatusBar(), // Sağ üstte şarj ve bağlantı durumu
+        ],
       ),
       drawer: Drawer(
         child: ListView(

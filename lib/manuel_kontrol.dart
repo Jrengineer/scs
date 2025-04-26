@@ -13,3 +13,6 @@ class ManuelKontrol extends StatelessWidget {
     );
   }
 }
+actions: const [
+StatusBar(),
+],
