@@ -12,9 +12,13 @@ class AnaSayfaIcerik extends StatefulWidget {
 }
 
 class _AnaSayfaIcerikState extends State<AnaSayfaIcerik> {
-  String _city = 'İstanbul';
+  String _city = 'Eskişehir'; // Fabrika ayarı: Eskişehir
   Map<String, dynamic>? _forecastWeather;
   bool _isLoading = true;
+
+  // Şimdilik sahte değerler:
+  bool _isConnected = true; // Bağlantı var mı? Şimdilik var
+  int _batteryLevel = 75; // Şarj seviyesi (göstermelik)
 
   @override
   void initState() {
@@ -68,7 +72,9 @@ class _AnaSayfaIcerikState extends State<AnaSayfaIcerik> {
     return Padding(
       padding: const EdgeInsets.all(16.0),
       child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
         children: [
+          // Şehir ve değiştir butonu
           Row(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
@@ -83,11 +89,13 @@ class _AnaSayfaIcerikState extends State<AnaSayfaIcerik> {
             ],
           ),
           const SizedBox(height: 20),
+
+          // Hava durumu küçük kutular (yatay kaydırmalı)
           SizedBox(
             height: 200,
             child: ListView.builder(
               scrollDirection: Axis.horizontal,
-              itemCount: 5, // <<<<< BURAYI 5 YAPTIK!
+              itemCount: 5,
               itemBuilder: (context, index) {
                 final weatherData = forecastList[index * 8];
                 DateTime date = DateTime.now().add(Duration(days: index));
@@ -130,6 +138,52 @@ class _AnaSayfaIcerikState extends State<AnaSayfaIcerik> {
                 );
               },
             ),
+          ),
+
+          const SizedBox(height: 30),
+
+          // Bağlantı ve Şarj Durumu
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+            children: [
+              // Bağlantı Durumu
+              Column(
+                children: [
+                  Icon(
+                    _isConnected ? Icons.wifi : Icons.wifi_off,
+                    color: _isConnected ? Colors.green : Colors.red,
+                    size: 40,
+                  ),
+                  const SizedBox(height: 5),
+                  Text(
+                    _isConnected ? 'Bağlantı Var' : 'Bağlantı Yok',
+                    style: const TextStyle(fontSize: 16),
+                  ),
+                ],
+              ),
+
+              // Şarj Durumu
+              Column(
+                children: [
+                  Icon(
+                    _batteryLevel >= 75
+                        ? Icons.battery_full
+                        : _batteryLevel >= 50
+                        ? Icons.battery_3_bar
+                        : _batteryLevel >= 25
+                        ? Icons.battery_2_bar
+                        : Icons.battery_alert,
+                    color: _batteryLevel >= 25 ? Colors.green : Colors.red,
+                    size: 40,
+                  ),
+                  const SizedBox(height: 5),
+                  Text(
+                    'Şarj: $_batteryLevel%',
+                    style: const TextStyle(fontSize: 16),
+                  ),
+                ],
+              ),
+            ],
           ),
         ],
       ),
