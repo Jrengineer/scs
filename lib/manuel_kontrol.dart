@@ -14,8 +14,8 @@ class ManuelKontrol extends StatefulWidget {
 
 class _ManuelKontrolState extends State<ManuelKontrol> {
   RawDatagramSocket? _udpSocket;
-  final String _targetIP = '192.168.1.130'; // Jetson IP
-  final int _targetPort = 8888; // UDP Listener port
+  final String _targetIP = '192.168.1.130';
+  final int _targetPort = 8888;
 
   Map<int, Offset> _touchStartPoints = {};
   Map<int, Offset> _touchCurrentPoints = {};
@@ -35,14 +35,31 @@ class _ManuelKontrolState extends State<ManuelKontrol> {
     _udpSocket = await RawDatagramSocket.bind(InternetAddress.anyIPv4, 0);
   }
 
+  bool _isJoystickArea(Offset position, Size size) {
+    final width = size.width;
+    final height = size.height;
+
+    final colWidth = width / 3;
+    final rowHeight = height / 3;
+
+    int col = (position.dx / colWidth).floor();
+    int row = (position.dy / rowHeight).floor();
+
+    if (row == 1) { // Ortadaki satır
+      if (col == 0 || col == 2) {
+        return true; // Sol ve sağ alan joystick aktif
+      }
+    }
+    return false; // Diğer tüm bölgelerde joystick yok
+  }
+
   void _sendData() {
     if (_udpSocket == null) return;
 
     double forwardBackward = 0;
     double leftRight = 0;
 
-    final screenWidth = MediaQuery.of(context).size.width;
-    final deadZoneWidth = screenWidth * 0.2;
+    final screenSize = MediaQuery.of(context).size;
 
     if (_touchCurrentPoints.isEmpty) {
       Map<String, int> messageMap = {
@@ -50,17 +67,16 @@ class _ManuelKontrolState extends State<ManuelKontrol> {
         "joystick_turn": 0,
       };
       String message = jsonEncode(messageMap);
-      print('Gönderilen mesaj: $message');
       _udpSocket!.send(utf8.encode(message), InternetAddress(_targetIP), _targetPort);
       return;
     }
 
     _touchCurrentPoints.forEach((pointer, currentPosition) {
       final start = _touchStartPoints[pointer];
-      if (start != null) {
-        if (start.dx < screenWidth / 2 - deadZoneWidth / 2) {
+      if (start != null && _isJoystickArea(start, screenSize)) {
+        if (start.dx < screenSize.width / 2) {
           forwardBackward = (start.dy - currentPosition.dy) / 100;
-        } else if (start.dx > screenWidth / 2 + deadZoneWidth / 2) {
+        } else {
           leftRight = (currentPosition.dx - start.dx) / 100;
         }
       }
@@ -77,7 +93,6 @@ class _ManuelKontrolState extends State<ManuelKontrol> {
       "joystick_turn": scaledLeftRight,
     };
     String message = jsonEncode(messageMap);
-    print('Gönderilen mesaj: $message');
     _udpSocket!.send(utf8.encode(message), InternetAddress(_targetIP), _targetPort);
   }
 
@@ -90,9 +105,8 @@ class _ManuelKontrolState extends State<ManuelKontrol> {
 
   @override
   Widget build(BuildContext context) {
-    final screenWidth = MediaQuery.of(context).size.width;
+    final screenSize = MediaQuery.of(context).size;
     final joystickRadius = 60.0;
-    final deadZoneWidth = screenWidth * 0.2;
 
     return Scaffold(
       appBar: AppBar(
@@ -121,19 +135,23 @@ class _ManuelKontrolState extends State<ManuelKontrol> {
           ),
           Listener(
             onPointerDown: (details) {
-              setState(() {
-                _touchStartPoints[details.pointer] = details.localPosition;
-                _touchCurrentPoints[details.pointer] = details.localPosition;
-              });
+              if (_isJoystickArea(details.localPosition, screenSize)) {
+                setState(() {
+                  _touchStartPoints[details.pointer] = details.localPosition;
+                  _touchCurrentPoints[details.pointer] = details.localPosition;
+                });
+              }
             },
             onPointerMove: (details) {
-              setState(() {
-                _touchCurrentPoints[details.pointer] = _limitMovement(
-                  _touchStartPoints[details.pointer]!,
-                  details.localPosition,
-                  100,
-                );
-              });
+              if (_touchStartPoints.containsKey(details.pointer)) {
+                setState(() {
+                  _touchCurrentPoints[details.pointer] = _limitMovement(
+                    _touchStartPoints[details.pointer]!,
+                    details.localPosition,
+                    100,
+                  );
+                });
+              }
             },
             onPointerUp: (details) {
               setState(() {
@@ -153,6 +171,7 @@ class _ManuelKontrolState extends State<ManuelKontrol> {
                 startPoints: _touchStartPoints,
                 currentPoints: _touchCurrentPoints,
                 joystickRadius: joystickRadius,
+                screenSize: screenSize,
               ),
             ),
           ),
@@ -182,15 +201,39 @@ class JoystickPainter extends CustomPainter {
   final Map<int, Offset> startPoints;
   final Map<int, Offset> currentPoints;
   final double joystickRadius;
+  final Size screenSize;
 
   JoystickPainter({
     required this.startPoints,
     required this.currentPoints,
     required this.joystickRadius,
+    required this.screenSize,
   });
 
   @override
   void paint(Canvas canvas, Size size) {
+    final width = size.width;
+    final height = size.height;
+
+    final colWidth = width / 3;
+    final rowHeight = height / 3;
+
+    final activePaint = Paint()..color = Colors.green.withOpacity(0.3);
+    final inactivePaint = Paint()..color = Colors.transparent;
+
+    // Boya joystick aktif bölgeleri
+    for (int row = 0; row < 3; row++) {
+      for (int col = 0; col < 3; col++) {
+        bool isActive = false;
+        if (row == 1 && (col == 0 || col == 2)) {
+          isActive = true;
+        }
+        final rect = Rect.fromLTWH(col * colWidth, row * rowHeight, colWidth, rowHeight);
+        canvas.drawRect(rect, isActive ? activePaint : inactivePaint);
+      }
+    }
+
+    // Joystick çemberlerini boya
     final paint = Paint()..color = Colors.yellow.withOpacity(0.5);
 
     startPoints.forEach((pointer, start) {
