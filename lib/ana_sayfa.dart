@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
-import 'weather_service.dart';
-import 'city_selection.dart';
+import 'manuel_kontrol.dart';
+import 'ayarlar.dart';
+import 'kamera_sayfasi.dart';
+import 'ana_sayfa_icerik.dart'; // Hava durumu burada olacak
 
 class AnaSayfa extends StatefulWidget {
   const AnaSayfa({super.key});
@@ -10,100 +12,75 @@ class AnaSayfa extends StatefulWidget {
 }
 
 class _AnaSayfaState extends State<AnaSayfa> {
-  String _city = 'İstanbul'; // Başlangıç şehri
-  Map<String, dynamic>? _currentWeather;
-  Map<String, dynamic>? _forecastWeather;
-  bool _isLoading = true;
+  int _selectedIndex = 0;
 
-  @override
-  void initState() {
-    super.initState();
-    _fetchWeather();
-  }
-
-  Future<void> _fetchWeather() async {
-    setState(() {
-      _isLoading = true;
-    });
-
-    final current = await WeatherService.fetchCurrentWeather(_city);
-    final forecast = await WeatherService.fetchForecastWeather(_city);
-
-    setState(() {
-      _currentWeather = current;
-      _forecastWeather = forecast;
-      _isLoading = false;
-    });
-  }
-
-  void _selectCity() async {
-    final selectedCity = await Navigator.push(
-      context,
-      MaterialPageRoute(builder: (context) => const CitySelectionPage()),
-    );
-
-    if (selectedCity != null) {
-      setState(() {
-        _city = selectedCity;
-      });
-      _fetchWeather();
-    }
-  }
+  final List<Widget> _pages = [
+    const AnaSayfaIcerik(),  // Hava durumu burada gösterilecek
+    const ManuelKontrol(),
+    const Ayarlar(),
+    const KameraSayfasi(),
+  ];
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
         title: const Text('Solar Panel Temizlik Robotu'),
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.location_city),
-            onPressed: _selectCity,
-          ),
-        ],
       ),
-      body: _isLoading
-          ? const Center(child: CircularProgressIndicator())
-          : _buildWeatherContent(),
-    );
-  }
-
-  Widget _buildWeatherContent() {
-    if (_currentWeather == null || _forecastWeather == null) {
-      return const Center(child: Text('Veri alınamadı'));
-    }
-
-    final todayWeather = _currentWeather!;
-    final tomorrowWeather = _forecastWeather!['list'][7]; // Yaklaşık yarın
-
-    return Padding(
-      padding: const EdgeInsets.all(16.0),
-      child: Column(
-        children: [
-          Text(
-            '📍 $_city',
-            style: const TextStyle(fontSize: 28, fontWeight: FontWeight.bold),
-          ),
-          const SizedBox(height: 20),
-          Card(
-            child: ListTile(
-              leading: Image.network(
-                  'https://openweathermap.org/img/wn/${todayWeather['weather'][0]['icon']}@2x.png'),
-              title: Text('Bugün: ${todayWeather['weather'][0]['description']}'),
-              subtitle: Text('${todayWeather['main']['temp'].toStringAsFixed(0)}°C'),
+      drawer: Drawer(
+        child: ListView(
+          padding: EdgeInsets.zero,
+          children: [
+            const DrawerHeader(
+              decoration: BoxDecoration(
+                color: Colors.blue,
+              ),
+              child: Text('Menü', style: TextStyle(color: Colors.white, fontSize: 24)),
             ),
-          ),
-          const SizedBox(height: 10),
-          Card(
-            child: ListTile(
-              leading: Image.network(
-                  'https://openweathermap.org/img/wn/${tomorrowWeather['weather'][0]['icon']}@2x.png'),
-              title: Text('Yarın: ${tomorrowWeather['weather'][0]['description']}'),
-              subtitle: Text('${tomorrowWeather['main']['temp'].toStringAsFixed(0)}°C'),
+            ListTile(
+              leading: const Icon(Icons.home),
+              title: const Text('Ana Sayfa'),
+              onTap: () {
+                setState(() {
+                  _selectedIndex = 0;
+                });
+                Navigator.pop(context);
+              },
             ),
-          ),
-        ],
+            ListTile(
+              leading: const Icon(Icons.gamepad),
+              title: const Text('Manuel Kontrol'),
+              onTap: () {
+                setState(() {
+                  _selectedIndex = 1;
+                });
+                Navigator.pop(context);
+              },
+            ),
+            ListTile(
+              leading: const Icon(Icons.settings),
+              title: const Text('Ayarlar'),
+              onTap: () {
+                setState(() {
+                  _selectedIndex = 2;
+                });
+                Navigator.pop(context);
+              },
+            ),
+            ListTile(
+              leading: const Icon(Icons.camera_alt),
+              title: const Text('Kamera Görüntüsü'),
+              onTap: () {
+                setState(() {
+                  _selectedIndex = 3;
+                });
+                Navigator.pop(context);
+              },
+            ),
+          ],
+        ),
       ),
+      body: _pages[_selectedIndex],
     );
   }
 }
