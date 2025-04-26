@@ -2,7 +2,6 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 import 'dart:math';
-import 'dart:typed_data';
 import 'package:flutter/material.dart';
 
 class ManuelKontrol extends StatefulWidget {
@@ -21,8 +20,10 @@ class _ManuelKontrolState extends State<ManuelKontrol> {
   Map<int, Offset> _touchCurrentPoints = {};
 
   double _speed = 50;
-
   Timer? _sendTimer;
+
+  late Rect _leftJoystickArea;
+  late Rect _rightJoystickArea;
 
   @override
   void initState() {
@@ -35,22 +36,16 @@ class _ManuelKontrolState extends State<ManuelKontrol> {
     _udpSocket = await RawDatagramSocket.bind(InternetAddress.anyIPv4, 0);
   }
 
-  bool _isJoystickArea(Offset position, Size size) {
-    final width = size.width;
-    final height = size.height;
+  void _calculateJoystickAreas(Size size) {
+    final colWidth = size.width / 3;
+    final rowHeight = size.height / 3;
 
-    final colWidth = width / 3;
-    final rowHeight = height / 3;
+    _leftJoystickArea = Rect.fromLTWH(0, 0, colWidth, rowHeight); // Üst Sol
+    _rightJoystickArea = Rect.fromLTWH(colWidth * 2, 0, colWidth, rowHeight); // Üst Sağ
+  }
 
-    int col = (position.dx / colWidth).floor();
-    int row = (position.dy / rowHeight).floor();
-
-    if (row == 1) { // Ortadaki satır
-      if (col == 0 || col == 2) {
-        return true; // Sol ve sağ alan joystick aktif
-      }
-    }
-    return false; // Diğer tüm bölgelerde joystick yok
+  bool _isInJoystickArea(Offset position) {
+    return _leftJoystickArea.contains(position) || _rightJoystickArea.contains(position);
   }
 
   void _sendData() {
@@ -59,28 +54,29 @@ class _ManuelKontrolState extends State<ManuelKontrol> {
     double forwardBackward = 0;
     double leftRight = 0;
 
-    final screenSize = MediaQuery.of(context).size;
-
     if (_touchCurrentPoints.isEmpty) {
-      Map<String, int> messageMap = {
-        "joystick_forward": 0,
-        "joystick_turn": 0,
-      };
-      String message = jsonEncode(messageMap);
-      _udpSocket!.send(utf8.encode(message), InternetAddress(_targetIP), _targetPort);
+      _sendZero();
       return;
     }
 
+    bool validTouchExists = false;
+
     _touchCurrentPoints.forEach((pointer, currentPosition) {
       final start = _touchStartPoints[pointer];
-      if (start != null && _isJoystickArea(start, screenSize)) {
-        if (start.dx < screenSize.width / 2) {
+      if (start != null && _isInJoystickArea(start)) {
+        validTouchExists = true;
+        if (_leftJoystickArea.contains(start)) {
           forwardBackward = (start.dy - currentPosition.dy) / 100;
-        } else {
+        } else if (_rightJoystickArea.contains(start)) {
           leftRight = (currentPosition.dx - start.dx) / 100;
         }
       }
     });
+
+    if (!validTouchExists) {
+      _sendZero();
+      return;
+    }
 
     forwardBackward = forwardBackward.clamp(-1.0, 1.0);
     leftRight = leftRight.clamp(-1.0, 1.0);
@@ -96,6 +92,15 @@ class _ManuelKontrolState extends State<ManuelKontrol> {
     _udpSocket!.send(utf8.encode(message), InternetAddress(_targetIP), _targetPort);
   }
 
+  void _sendZero() {
+    Map<String, int> messageMap = {
+      "joystick_forward": 0,
+      "joystick_turn": 0,
+    };
+    String message = jsonEncode(messageMap);
+    _udpSocket?.send(utf8.encode(message), InternetAddress(_targetIP), _targetPort);
+  }
+
   @override
   void dispose() {
     _udpSocket?.close();
@@ -105,8 +110,8 @@ class _ManuelKontrolState extends State<ManuelKontrol> {
 
   @override
   Widget build(BuildContext context) {
-    final screenSize = MediaQuery.of(context).size;
-    final joystickRadius = 60.0;
+    final size = MediaQuery.of(context).size;
+    _calculateJoystickAreas(size);
 
     return Scaffold(
       appBar: AppBar(
@@ -114,67 +119,81 @@ class _ManuelKontrolState extends State<ManuelKontrol> {
       ),
       body: Stack(
         children: [
-          Positioned(
-            top: 16,
-            left: 16,
-            child: SizedBox(
-              width: 150,
-              child: Slider(
-                value: _speed,
-                min: 0,
-                max: 100,
-                divisions: 20,
-                label: _speed.round().toString(),
-                onChanged: (value) {
+          _buildSpeedSlider(),
+          Positioned.fill(
+            top: 100,
+            child: Listener(
+              onPointerDown: (details) {
+                if (_isInJoystickArea(details.localPosition)) {
                   setState(() {
-                    _speed = value;
+                    _touchStartPoints[details.pointer] = details.localPosition;
+                    _touchCurrentPoints[details.pointer] = details.localPosition;
                   });
-                },
+                }
+              },
+              onPointerMove: (details) {
+                if (_touchStartPoints.containsKey(details.pointer)) {
+                  setState(() {
+                    _touchCurrentPoints[details.pointer] = _limitMovement(
+                      _touchStartPoints[details.pointer]!,
+                      details.localPosition,
+                      100,
+                    );
+                  });
+                }
+              },
+              onPointerUp: (details) {
+                setState(() {
+                  _touchStartPoints.remove(details.pointer);
+                  _touchCurrentPoints.remove(details.pointer);
+                });
+              },
+              onPointerCancel: (details) {
+                setState(() {
+                  _touchStartPoints.remove(details.pointer);
+                  _touchCurrentPoints.remove(details.pointer);
+                });
+              },
+              child: CustomPaint(
+                size: Size.infinite,
+                painter: JoystickPainter(
+                  startPoints: _touchStartPoints,
+                  currentPoints: _touchCurrentPoints,
+                  leftJoystickArea: _leftJoystickArea,
+                  rightJoystickArea: _rightJoystickArea,
+                ),
               ),
             ),
           ),
-          Listener(
-            onPointerDown: (details) {
-              if (_isJoystickArea(details.localPosition, screenSize)) {
+        ],
+      ),
+    );
+  }
+
+  Widget _buildSpeedSlider() {
+    return Positioned(
+      top: 16,
+      left: 16,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text('Hız Limiti', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+          SizedBox(
+            width: 150,
+            child: Slider(
+              value: _speed,
+              min: 10,
+              max: 100,
+              divisions: 9,
+              label: '${_speed.round()}%',
+              onChanged: (value) {
                 setState(() {
-                  _touchStartPoints[details.pointer] = details.localPosition;
-                  _touchCurrentPoints[details.pointer] = details.localPosition;
+                  _speed = value;
                 });
-              }
-            },
-            onPointerMove: (details) {
-              if (_touchStartPoints.containsKey(details.pointer)) {
-                setState(() {
-                  _touchCurrentPoints[details.pointer] = _limitMovement(
-                    _touchStartPoints[details.pointer]!,
-                    details.localPosition,
-                    100,
-                  );
-                });
-              }
-            },
-            onPointerUp: (details) {
-              setState(() {
-                _touchStartPoints.remove(details.pointer);
-                _touchCurrentPoints.remove(details.pointer);
-              });
-            },
-            onPointerCancel: (details) {
-              setState(() {
-                _touchStartPoints.remove(details.pointer);
-                _touchCurrentPoints.remove(details.pointer);
-              });
-            },
-            child: CustomPaint(
-              size: Size.infinite,
-              painter: JoystickPainter(
-                startPoints: _touchStartPoints,
-                currentPoints: _touchCurrentPoints,
-                joystickRadius: joystickRadius,
-                screenSize: screenSize,
-              ),
+              },
             ),
           ),
+          Text('Seçili: ${_speed.round()}%', style: const TextStyle(fontSize: 14)),
         ],
       ),
     );
@@ -200,47 +219,32 @@ class _ManuelKontrolState extends State<ManuelKontrol> {
 class JoystickPainter extends CustomPainter {
   final Map<int, Offset> startPoints;
   final Map<int, Offset> currentPoints;
-  final double joystickRadius;
-  final Size screenSize;
+  final Rect leftJoystickArea;
+  final Rect rightJoystickArea;
 
   JoystickPainter({
     required this.startPoints,
     required this.currentPoints,
-    required this.joystickRadius,
-    required this.screenSize,
+    required this.leftJoystickArea,
+    required this.rightJoystickArea,
   });
 
   @override
   void paint(Canvas canvas, Size size) {
-    final width = size.width;
-    final height = size.height;
+    final greenPaint = Paint()..color = Colors.green.withOpacity(0.3);
+    final yellowPaint = Paint()..color = Colors.yellow.withOpacity(0.5);
+    final orangePaint = Paint()..color = Colors.orange;
 
-    final colWidth = width / 3;
-    final rowHeight = height / 3;
+    // Yeşil joystick alanlarını çiz
+    canvas.drawRect(leftJoystickArea, greenPaint);
+    canvas.drawRect(rightJoystickArea, greenPaint);
 
-    final activePaint = Paint()..color = Colors.green.withOpacity(0.3);
-    final inactivePaint = Paint()..color = Colors.transparent;
-
-    // Boya joystick aktif bölgeleri
-    for (int row = 0; row < 3; row++) {
-      for (int col = 0; col < 3; col++) {
-        bool isActive = false;
-        if (row == 1 && (col == 0 || col == 2)) {
-          isActive = true;
-        }
-        final rect = Rect.fromLTWH(col * colWidth, row * rowHeight, colWidth, rowHeight);
-        canvas.drawRect(rect, isActive ? activePaint : inactivePaint);
-      }
-    }
-
-    // Joystick çemberlerini boya
-    final paint = Paint()..color = Colors.yellow.withOpacity(0.5);
-
+    // Joystickler
     startPoints.forEach((pointer, start) {
       final current = currentPoints[pointer];
       if (current != null) {
-        canvas.drawCircle(start, joystickRadius, paint);
-        canvas.drawCircle(current, joystickRadius / 2, Paint()..color = Colors.orange);
+        canvas.drawCircle(start, 60, yellowPaint);
+        canvas.drawCircle(current, 30, orangePaint);
       }
     });
   }
