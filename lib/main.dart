@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'ana_sayfa_icerik.dart'; // Değişiklik burada
+import 'ana_sayfa.dart'; // Çok sayfalı sistem (BURGER MENÜLÜ AnaSayfa)
 
 void main() {
   runApp(const MyApp());
@@ -13,7 +13,7 @@ class MyApp extends StatelessWidget {
     return MaterialApp(
       title: 'Solar Panel Temizlik Robotu',
       theme: ThemeData.dark(),
-      home: const AnaSayfaIcerik(), // <<< BURASI DEĞİŞTİ
+      home: const AnaSayfa(),
       debugShowCheckedModeBanner: false,
     );
   }
