@@ -12,9 +12,7 @@ class MyApp extends StatelessWidget {
   Widget build(BuildContext context) {
     return MaterialApp(
       title: 'Solar Panel Temizlik Robotu',
-      theme: ThemeData(
-        primarySwatch: Colors.blue,
-      ),
+      theme: ThemeData.dark(),  // 🖤 Burayı koyu tema yaptım!
       home: const AnaSayfa(),
       debugShowCheckedModeBanner: false,
     );
