@@ -34,6 +34,12 @@ class _ManuelKontrolState extends State<ManuelKontrol> {
   Rect? _rightJoystickArea;
   Rect? _cameraArea;
 
+  // ========== Fırça kontrolleri için EK ALAN ==========
+  bool _isBrush1On = false;
+  bool _isBrush2On = false;
+  Timer? _brushTimer;
+  // ====================================================
+
   @override
   void initState() {
     super.initState();
@@ -169,12 +175,36 @@ class _ManuelKontrolState extends State<ManuelKontrol> {
     _udpSocket?.send(utf8.encode(message), InternetAddress(_targetIP), _targetPort);
   }
 
+  // ========== Fırça kontrolü için EK FONKSİYONLAR ==========
+
+  void _sendBrushData() {
+    if (_udpSocket == null) return;
+    Map<String, int> brushMap = {
+      "brush1": _isBrush1On ? 1 : 0,
+      "brush2": _isBrush2On ? 1 : 0,
+    };
+    String brushMessage = jsonEncode(brushMap);
+    _udpSocket!.send(utf8.encode(brushMessage), InternetAddress(_targetIP), _targetPort);
+  }
+
+  void _startBrushLoop() {
+    _brushTimer?.cancel();
+    _brushTimer = Timer.periodic(const Duration(milliseconds: 100), (_) => _sendBrushData());
+  }
+
+  void _stopBrushLoop() {
+    _brushTimer?.cancel();
+  }
+
+  // =========================================================
+
   @override
   void dispose() {
     _udpSocket?.close();
     _tcpSocket?.destroy();
     _sendTimer?.cancel();
     _fpsTimer?.cancel();
+    _stopBrushLoop();
     super.dispose();
   }
 
@@ -187,33 +217,89 @@ class _ManuelKontrolState extends State<ManuelKontrol> {
       appBar: AppBar(
         title: const Text('Manuel Kontrol'),
       ),
-      body: Stack(
+      body: Column(
         children: [
-          if (_cameraImageBytes != null)
-            Positioned(
-              left: _cameraArea!.left,
-              top: _cameraArea!.top,
-              width: _cameraArea!.width,
-              height: _cameraArea!.height,
-              child: Image.memory(
-                _cameraImageBytes!,
-                fit: BoxFit.contain,
-                gaplessPlayback: true,
-              ),
-            ),
-          _buildJoystickLayer(size),
-          _buildSpeedSlider(),
-          Positioned(
-            bottom: 16,
-            right: 16,
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.end,
+          // ESKİ STACK YAPIN BURADA HİÇ DEĞİŞMEDİ:
+          Expanded(
+            child: Stack(
               children: [
-                Text('FPS: $_fps', style: const TextStyle(color: Colors.white, fontSize: 16)),
-                Text('Gecikme: $_latencyMs ms', style: const TextStyle(color: Colors.white, fontSize: 16)),
+                if (_cameraImageBytes != null)
+                  Positioned(
+                    left: _cameraArea!.left,
+                    top: _cameraArea!.top,
+                    width: _cameraArea!.width,
+                    height: _cameraArea!.height,
+                    child: Image.memory(
+                      _cameraImageBytes!,
+                      fit: BoxFit.contain,
+                      gaplessPlayback: true,
+                    ),
+                  ),
+                _buildJoystickLayer(size),
+                _buildSpeedSlider(),
+                Positioned(
+                  bottom: 16,
+                  right: 16,
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.end,
+                    children: [
+                      Text('FPS: $_fps', style: const TextStyle(color: Colors.white, fontSize: 16)),
+                      Text('Gecikme: $_latencyMs ms', style: const TextStyle(color: Colors.white, fontSize: 16)),
+                    ],
+                  ),
+                ),
               ],
             ),
           ),
+
+          // ============ SADECE ŞU KISMI EKLEDİM =============
+          Padding(
+            padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 24),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+              children: [
+                Column(
+                  children: [
+                    const Text("Fırça 1", style: TextStyle(fontWeight: FontWeight.bold)),
+                    Switch(
+                      value: _isBrush1On,
+                      onChanged: (value) {
+                        setState(() {
+                          _isBrush1On = value;
+                        });
+                        if (_isBrush1On || _isBrush2On) {
+                          _startBrushLoop();
+                        } else {
+                          _stopBrushLoop();
+                          _sendBrushData();
+                        }
+                      },
+                    ),
+                  ],
+                ),
+                Column(
+                  children: [
+                    const Text("Fırça 2", style: TextStyle(fontWeight: FontWeight.bold)),
+                    Switch(
+                      value: _isBrush2On,
+                      onChanged: (value) {
+                        setState(() {
+                          _isBrush2On = value;
+                        });
+                        if (_isBrush1On || _isBrush2On) {
+                          _startBrushLoop();
+                        } else {
+                          _stopBrushLoop();
+                          _sendBrushData();
+                        }
+                      },
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+          // ============ EKLEDİĞİM KISIM BURADA BİTTİ =========
         ],
       ),
     );
