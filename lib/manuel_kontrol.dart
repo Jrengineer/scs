@@ -236,7 +236,6 @@ class _ManuelKontrolState extends State<ManuelKontrol> {
                     ),
                   ),
                 _buildJoystickLayer(size),
-                _buildSpeedSlider(),
                 Positioned(
                   bottom: 16,
                   right: 16,
@@ -252,13 +251,16 @@ class _ManuelKontrolState extends State<ManuelKontrol> {
             ),
           ),
 
-          // ============ SADECE ŞU KISMI EKLEDİM =============
+          // ====== YENİ ALT KISIM ======
           Padding(
             padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 24),
             child: Row(
               mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+              crossAxisAlignment: CrossAxisAlignment.center,
               children: [
+                // Fırça 1
                 Column(
+                  mainAxisSize: MainAxisSize.min,
                   children: [
                     const Text("Fırça 1", style: TextStyle(fontWeight: FontWeight.bold)),
                     Switch(
@@ -277,7 +279,34 @@ class _ManuelKontrolState extends State<ManuelKontrol> {
                     ),
                   ],
                 ),
+
+                // Hız Limiti Slider'ı tam ortada
                 Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    const Text('Hız Limiti', style: TextStyle(color: Colors.white, fontSize: 16)),
+                    SizedBox(
+                      width: 160,
+                      child: Slider(
+                        value: _speed,
+                        min: 10,
+                        max: 100,
+                        divisions: 9,
+                        label: '${_speed.round()}%',
+                        onChanged: (value) {
+                          setState(() {
+                            _speed = value;
+                          });
+                        },
+                      ),
+                    ),
+                    Text('Seçili: ${_speed.round()}%', style: const TextStyle(color: Colors.white, fontSize: 14)),
+                  ],
+                ),
+
+                // Fırça 2
+                Column(
+                  mainAxisSize: MainAxisSize.min,
                   children: [
                     const Text("Fırça 2", style: TextStyle(fontWeight: FontWeight.bold)),
                     Switch(
@@ -299,7 +328,7 @@ class _ManuelKontrolState extends State<ManuelKontrol> {
               ],
             ),
           ),
-          // ============ EKLEDİĞİM KISIM BURADA BİTTİ =========
+          // ====== YENİ ALT KISIM BİTTİ ======
         ],
       ),
     );
@@ -348,35 +377,6 @@ class _ManuelKontrolState extends State<ManuelKontrol> {
             rightJoystickArea: _rightJoystickArea!,
           ),
         ),
-      ),
-    );
-  }
-
-  Widget _buildSpeedSlider() {
-    return Positioned(
-      bottom: 70,
-      left: 16,
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          const Text('Hız Limiti', style: TextStyle(color: Colors.white, fontSize: 16)),
-          SizedBox(
-            width: 200,
-            child: Slider(
-              value: _speed,
-              min: 10,
-              max: 100,
-              divisions: 9,
-              label: '${_speed.round()}%',
-              onChanged: (value) {
-                setState(() {
-                  _speed = value;
-                });
-              },
-            ),
-          ),
-          Text('Seçili: ${_speed.round()}%', style: const TextStyle(color: Colors.white, fontSize: 14)),
-        ],
       ),
     );
   }
