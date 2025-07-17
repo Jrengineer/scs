@@ -34,18 +34,15 @@ class _ManuelKontrolState extends State<ManuelKontrol> {
   Rect? _rightJoystickArea;
   Rect? _cameraArea;
 
-  // ========== Fırça kontrolleri için EK ALAN ==========
   bool _isBrush1On = false;
   bool _isBrush2On = false;
-  Timer? _brushTimer;
-  // ====================================================
 
   @override
   void initState() {
     super.initState();
     _initUdp();
     _initTcp();
-    _sendTimer = Timer.periodic(const Duration(milliseconds: 100), (_) => _sendData());
+    _sendTimer = Timer.periodic(const Duration(milliseconds: 10), (_) => _sendData());
     _fpsTimer = Timer.periodic(const Duration(seconds: 1), (_) {
       setState(() {
         _fps = _frameCounter;
@@ -107,7 +104,7 @@ class _ManuelKontrolState extends State<ManuelKontrol> {
     double cameraWidth = size.width * 0.6;
     double cameraHeight = size.height * 0.4;
     double cameraX = (size.width - cameraWidth) / 2;
-    double cameraY = (size.height - cameraHeight) / 2 - 100; // YUKARI aldım (-100)
+    double cameraY = (size.height - cameraHeight) / 2 - 100;
 
     _cameraArea = Rect.fromLTWH(cameraX, cameraY, cameraWidth, cameraHeight);
 
@@ -128,13 +125,8 @@ class _ManuelKontrolState extends State<ManuelKontrol> {
     double forwardBackward = 0;
     double leftRight = 0;
 
-    if (_touchCurrentPoints.isEmpty) {
-      _sendZero();
-      return;
-    }
-
+    // Joystick kullanılmıyorsa yine de brush komutlarını DAİMA gönder!
     bool validTouchExists = false;
-
     _touchCurrentPoints.forEach((pointer, currentPosition) {
       final start = _touchStartPoints[pointer];
       if (start != null && _isInJoystickArea(start)) {
@@ -147,56 +139,22 @@ class _ManuelKontrolState extends State<ManuelKontrol> {
       }
     });
 
-    if (!validTouchExists) {
-      _sendZero();
-      return;
-    }
-
     forwardBackward = forwardBackward.clamp(-1.0, 1.0);
     leftRight = leftRight.clamp(-1.0, 1.0);
 
     int scaledForwardBackward = (forwardBackward * _speed).toInt();
     int scaledLeftRight = (leftRight * _speed).toInt();
 
-    Map<String, int> messageMap = {
-      "joystick_forward": scaledForwardBackward,
-      "joystick_turn": scaledLeftRight,
+    Map<String, dynamic> messageMap = {
+      "joystick_forward": validTouchExists ? scaledForwardBackward : 0,
+      "joystick_turn": validTouchExists ? scaledLeftRight : 0,
+      "brush1": _isBrush1On ? 1 : 0,
+      "brush2": _isBrush2On ? 1 : 0,
+      "ts": DateTime.now().millisecondsSinceEpoch,
     };
     String message = jsonEncode(messageMap);
     _udpSocket!.send(utf8.encode(message), InternetAddress(_targetIP), _targetPort);
   }
-
-  void _sendZero() {
-    Map<String, int> messageMap = {
-      "joystick_forward": 0,
-      "joystick_turn": 0,
-    };
-    String message = jsonEncode(messageMap);
-    _udpSocket?.send(utf8.encode(message), InternetAddress(_targetIP), _targetPort);
-  }
-
-  // ========== Fırça kontrolü için EK FONKSİYONLAR ==========
-
-  void _sendBrushData() {
-    if (_udpSocket == null) return;
-    Map<String, int> brushMap = {
-      "brush1": _isBrush1On ? 1 : 0,
-      "brush2": _isBrush2On ? 1 : 0,
-    };
-    String brushMessage = jsonEncode(brushMap);
-    _udpSocket!.send(utf8.encode(brushMessage), InternetAddress(_targetIP), _targetPort);
-  }
-
-  void _startBrushLoop() {
-    _brushTimer?.cancel();
-    _brushTimer = Timer.periodic(const Duration(milliseconds: 100), (_) => _sendBrushData());
-  }
-
-  void _stopBrushLoop() {
-    _brushTimer?.cancel();
-  }
-
-  // =========================================================
 
   @override
   void dispose() {
@@ -204,7 +162,6 @@ class _ManuelKontrolState extends State<ManuelKontrol> {
     _tcpSocket?.destroy();
     _sendTimer?.cancel();
     _fpsTimer?.cancel();
-    _stopBrushLoop();
     super.dispose();
   }
 
@@ -219,7 +176,6 @@ class _ManuelKontrolState extends State<ManuelKontrol> {
       ),
       body: Column(
         children: [
-          // ESKİ STACK YAPIN BURADA HİÇ DEĞİŞMEDİ:
           Expanded(
             child: Stack(
               children: [
@@ -250,15 +206,12 @@ class _ManuelKontrolState extends State<ManuelKontrol> {
               ],
             ),
           ),
-
-          // ====== YENİ ALT KISIM ======
           Padding(
             padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 24),
             child: Row(
               mainAxisAlignment: MainAxisAlignment.spaceEvenly,
               crossAxisAlignment: CrossAxisAlignment.center,
               children: [
-                // Fırça 1
                 Column(
                   mainAxisSize: MainAxisSize.min,
                   children: [
@@ -269,18 +222,10 @@ class _ManuelKontrolState extends State<ManuelKontrol> {
                         setState(() {
                           _isBrush1On = value;
                         });
-                        if (_isBrush1On || _isBrush2On) {
-                          _startBrushLoop();
-                        } else {
-                          _stopBrushLoop();
-                          _sendBrushData();
-                        }
                       },
                     ),
                   ],
                 ),
-
-                // Hız Limiti Slider'ı tam ortada
                 Column(
                   mainAxisSize: MainAxisSize.min,
                   children: [
@@ -303,8 +248,6 @@ class _ManuelKontrolState extends State<ManuelKontrol> {
                     Text('Seçili: ${_speed.round()}%', style: const TextStyle(color: Colors.white, fontSize: 14)),
                   ],
                 ),
-
-                // Fırça 2
                 Column(
                   mainAxisSize: MainAxisSize.min,
                   children: [
@@ -315,12 +258,6 @@ class _ManuelKontrolState extends State<ManuelKontrol> {
                         setState(() {
                           _isBrush2On = value;
                         });
-                        if (_isBrush1On || _isBrush2On) {
-                          _startBrushLoop();
-                        } else {
-                          _stopBrushLoop();
-                          _sendBrushData();
-                        }
                       },
                     ),
                   ],
@@ -328,7 +265,6 @@ class _ManuelKontrolState extends State<ManuelKontrol> {
               ],
             ),
           ),
-          // ====== YENİ ALT KISIM BİTTİ ======
         ],
       ),
     );
