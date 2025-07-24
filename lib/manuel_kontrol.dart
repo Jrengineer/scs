@@ -215,7 +215,7 @@ class _ManuelKontrolState extends State<ManuelKontrol> {
                 Column(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    const Text("Fırça 1", style: TextStyle(fontWeight: FontWeight.bold)),
+                    const Text("Ön Fırça", style: TextStyle(fontWeight: FontWeight.bold)),
                     Switch(
                       value: _isBrush1On,
                       onChanged: (value) {
@@ -251,7 +251,7 @@ class _ManuelKontrolState extends State<ManuelKontrol> {
                 Column(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    const Text("Fırça 2", style: TextStyle(fontWeight: FontWeight.bold)),
+                    const Text("Arka Fırça", style: TextStyle(fontWeight: FontWeight.bold)),
                     Switch(
                       value: _isBrush2On,
                       onChanged: (value) {
