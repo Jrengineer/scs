@@ -4,12 +4,12 @@ import 'dart:io';
 import 'dart:math';
 import 'package:flutter/material.dart';
 
-/// Jetson'daki udp_listener_node (Python) ile birebir uyumlu tek-joystick sayfası.
-/// - Sürekli 20 Hz UDP paket gönderir (heartbeat).
-/// - JSON payload: ts, joystick_forward, joystick_turn, brush1, brush2.
-/// - Joystick: basılan noktada spawn olur; bırakınca F=0, T=0 gönderilir.
-/// - İleri (+F): yukarı sürükleme, Dönüş (+T): sağa sürükleme.
-/// - Eksene yapışma: ±15° içinde yatay/dikey eksene snap (saf dönüş/saf ileri).
+/// Jetson'daki udp_listener_node ile uyumlu tek-joystick sayfası.
+/// - 20 Hz UDP heartbeat
+/// - JSON: ts, joystick_forward, joystick_turn, brush1, brush2
+/// - Joystick: basılan noktada spawn; bırakınca F=0, T=0
+/// - İleri (+F): yukarı; Dönüş (+T): sağa
+/// - Eksene yapışma (±15°): saf ileri/saf dönüş kolaylığı
 class TekJoystickSpawnPage extends StatefulWidget {
   const TekJoystickSpawnPage({super.key});
 
@@ -40,7 +40,7 @@ class _TekJoystickSpawnPageState extends State<TekJoystickSpawnPage> {
   double _deadZone = 8;     // px
   double _expo = 0.15;      // merkez hassasiyeti
 
-  // --- YENİ: Eksene yapışma parametreleri ---
+  // --- Eksene yapışma parametreleri ---
   double _snapAngleDeg = 15.0; // eksene ± açı eşiği
   int _snapIntThreshold = 2;   // çok küçük değerleri 0'la (±2)
 
@@ -154,8 +154,7 @@ class _TekJoystickSpawnPageState extends State<TekJoystickSpawnPage> {
     f = (1 - _expo) * f + _expo * f * f * f;
     t = (1 - _expo) * t + _expo * t * t * t;
 
-    // --- YENİ: Eksene yapışma (snap-to-axis) ---
-    // phi = eksenden sapma açısı; yataya/dikiye yakınsa ilgili ekseni 0'la.
+    // --- Eksene yapışma (snap-to-axis) ---
     final af = f.abs();
     final at = t.abs();
     final snapTan = tan(_snapAngleDeg * pi / 180.0);
@@ -169,7 +168,7 @@ class _TekJoystickSpawnPageState extends State<TekJoystickSpawnPage> {
       t = 0.0;
     }
 
-    // Tamsayıya çevir + küçük değerleri 0'a yuvarla (integer snap)
+    // Tamsayı + küçükleri 0
     int fInt = (f * 100).round();
     int tInt = (t * 100).round();
     if (fInt.abs() <= _snapIntThreshold) fInt = 0;
@@ -184,7 +183,7 @@ class _TekJoystickSpawnPageState extends State<TekJoystickSpawnPage> {
     if (!_udpReady || _udp == null) return;
 
     final payload = {
-      "ts": DateTime.now().millisecondsSinceEpoch, // gecikme ölçümü için
+      "ts": DateTime.now().millisecondsSinceEpoch,
       "joystick_forward": _forward,
       "joystick_turn": _turn,
       "brush1": _brush1,
@@ -205,6 +204,7 @@ class _TekJoystickSpawnPageState extends State<TekJoystickSpawnPage> {
     final theme = Theme.of(context);
     return Scaffold(
       appBar: AppBar(
+        automaticallyImplyLeading: false, // geri butonu yok
         title: const Text('Tek Joystick (Modbus Node Uyumlu)'),
         centerTitle: true,
         actions: [
@@ -225,6 +225,18 @@ class _TekJoystickSpawnPageState extends State<TekJoystickSpawnPage> {
           ),
         ],
       ),
+      drawer: Drawer( // diğer sayfalardaki menüyle aynı olmalı
+        child: ListView(
+          padding: EdgeInsets.zero,
+          children: const [
+            DrawerHeader(
+              decoration: BoxDecoration(color: Colors.blue),
+              child: Text('Menü'),
+            ),
+            // menü öğelerini buraya ekle
+          ],
+        ),
+      ),
       body: LayoutBuilder(
         builder: (context, constraints) {
           final shortSide = min(constraints.maxWidth, constraints.maxHeight);
@@ -237,7 +249,6 @@ class _TekJoystickSpawnPageState extends State<TekJoystickSpawnPage> {
 
           return Stack(
             children: [
-              // Joystick oluşturulabilir alan
               Positioned(
                 left: areaOffset.dx,
                 top: areaOffset.dy,
@@ -245,15 +256,11 @@ class _TekJoystickSpawnPageState extends State<TekJoystickSpawnPage> {
                 height: area.height,
                 child: _buildJoystickArea(theme),
               ),
-
-              // Fırça switchleri (sağ üst)
               Positioned(
                 right: 12,
                 top: 12,
                 child: _buildBrushPanel(theme),
               ),
-
-              // Telemetri (sol alt)
               Positioned(
                 left: 12,
                 bottom: 12,
@@ -289,7 +296,6 @@ class _TekJoystickSpawnPageState extends State<TekJoystickSpawnPage> {
                     ),
                     size: boxSize,
                   ),
-                // merkez artı işareti (opsiyonel)
                 IgnorePointer(
                   ignoring: true,
                   child: Center(
@@ -384,7 +390,6 @@ class _TekJoystickSpawnPageState extends State<TekJoystickSpawnPage> {
   }
 }
 
-/// Sarı joystick alanı (grid + sınır)
 class _AreaPainter extends CustomPainter {
   @override
   void paint(Canvas canvas, Size size) {
@@ -416,7 +421,6 @@ class _AreaPainter extends CustomPainter {
   bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
 }
 
-/// Joystick halkası + topuzu
 class _JoystickPainter extends CustomPainter {
   final Offset origin;
   final Offset point;

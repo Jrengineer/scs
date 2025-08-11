@@ -3,6 +3,8 @@ import 'weather_service.dart';
 import 'city_selection.dart';
 import 'package:intl/intl.dart';
 import 'package:intl/date_symbol_data_local.dart';
+import 'dart:async';
+import 'battery_client.dart';
 
 class AnaSayfaIcerik extends StatefulWidget {
   const AnaSayfaIcerik({super.key});
@@ -16,21 +18,26 @@ class _AnaSayfaIcerikState extends State<AnaSayfaIcerik> {
   Map<String, dynamic>? _forecastWeather;
   bool _isLoading = true;
 
+  Map<String, dynamic>? _batteryData;
+  StreamSubscription? _batterySub;
+
   @override
   void initState() {
     super.initState();
     initializeDateFormatting('tr_TR', null).then((_) {
       _fetchWeather();
     });
+
+    // Servisi başlat ve stream'e abone ol
+    BatteryClient.instance.ensureStarted();
+    _batterySub = BatteryClient.instance.batteryStream.listen((data) {
+      if (mounted) setState(() => _batteryData = data);
+    });
   }
 
   Future<void> _fetchWeather() async {
-    setState(() {
-      _isLoading = true;
-    });
-
+    setState(() => _isLoading = true);
     final forecast = await WeatherService.fetchForecastWeather(_city);
-
     setState(() {
       _forecastWeather = forecast;
       _isLoading = false;
@@ -42,13 +49,16 @@ class _AnaSayfaIcerikState extends State<AnaSayfaIcerik> {
       context,
       MaterialPageRoute(builder: (context) => const CitySelectionPage()),
     );
-
     if (selectedCity != null) {
-      setState(() {
-        _city = selectedCity;
-      });
+      setState(() => _city = selectedCity);
       _fetchWeather();
     }
+  }
+
+  @override
+  void dispose() {
+    _batterySub?.cancel();
+    super.dispose();
   }
 
   @override
@@ -63,7 +73,7 @@ class _AnaSayfaIcerikState extends State<AnaSayfaIcerik> {
       return const Center(child: Text('Veri alınamadı'));
     }
 
-    List<dynamic> forecastList = _forecastWeather!['list'];
+    final forecastList = _forecastWeather!['list'] as List<dynamic>;
 
     return Padding(
       padding: const EdgeInsets.all(16.0),
@@ -91,8 +101,8 @@ class _AnaSayfaIcerikState extends State<AnaSayfaIcerik> {
               itemCount: 5,
               itemBuilder: (context, index) {
                 final weatherData = forecastList[index * 8];
-                DateTime date = DateTime.now().add(Duration(days: index));
-                String formattedDate = DateFormat('EEEE, dd MMMM', 'tr_TR').format(date);
+                final date = DateTime.now().add(Duration(days: index));
+                final formattedDate = DateFormat('EEEE, dd MMMM', 'tr_TR').format(date);
 
                 return Container(
                   width: 150,
@@ -132,6 +142,35 @@ class _AnaSayfaIcerikState extends State<AnaSayfaIcerik> {
               },
             ),
           ),
+          const SizedBox(height: 30),
+
+          // Batarya bilgileri
+          if (_batteryData != null)
+            Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: Colors.green[800],
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: Column(
+                children: [
+                  const Text(
+                    "🔋 Batarya Durumu",
+                    style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+                  ),
+                  const SizedBox(height: 10),
+                  Text("Voltaj: ${_batteryData!['voltage_v'] ?? '-'} V"),
+                  Text("Akım: ${_batteryData!['current_a'] ?? '-'} A"),
+                  Text("Doluluk: ${_batteryData!['soc_pct'] ?? '-'} %"),
+                  Text("Kalan süre: ${_batteryData!['runtime_str'] ?? '-'}"),
+                  if (_batteryData!['temps_c'] != null &&
+                      (_batteryData!['temps_c'] as List).isNotEmpty)
+                    Text("Sıcaklıklar: ${(_batteryData!['temps_c'] as List).join(', ')} °C"),
+                ],
+              ),
+            )
+          else
+            const Text("Batarya verisi bekleniyor...", style: TextStyle(fontSize: 16)),
         ],
       ),
     );
