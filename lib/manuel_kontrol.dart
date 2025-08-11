@@ -71,9 +71,7 @@ class _ManuelKontrolState extends State<ManuelKontrol> {
       final byteData = ByteData.sublistView(Uint8List.fromList(_cameraBuffer));
       final frameLength = byteData.getUint32(0, Endian.big);
 
-      if (_cameraBuffer.length < 4 + frameLength) {
-        break;
-      }
+      if (_cameraBuffer.length < 4 + frameLength) break;
 
       final frameData = _cameraBuffer.sublist(4, 4 + frameLength);
       _cameraBuffer = _cameraBuffer.sublist(4 + frameLength);
@@ -100,23 +98,42 @@ class _ManuelKontrolState extends State<ManuelKontrol> {
     _tcpSocket?.destroy();
   }
 
+  // --- YENİ: Responsive yerleşim (sol/orta/sağ şeritler) ---
   void _calculateAreas(Size size) {
-    double cameraWidth = size.width * 0.6;
-    double cameraHeight = size.height * 0.4;
-    double cameraX = (size.width - cameraWidth) / 2;
-    double cameraY = (size.height - cameraHeight) / 2 - 100;
+    final bool isSmall = size.shortestSide < 600;
 
-    _cameraArea = Rect.fromLTWH(cameraX, cameraY, cameraWidth, cameraHeight);
+    // Sol ve sağ joystick şerit genişliği (ekranın ~%33'ü)
+    final double sideW = size.width * (isSmall ? 0.24 : 0.20);
+    final double middleW = size.width - (2 * sideW);
 
-    _leftJoystickArea = Rect.fromLTWH(0, cameraY, cameraX, cameraHeight);
-    _rightJoystickArea = Rect.fromLTWH(cameraX + cameraWidth, cameraY, cameraX, cameraHeight);
+    // Kamera boyutu: orta şeridin %90'ı kadar genişlik, yükseklik ekranın ~%55'i (küçük ekranda daha büyük)
+    final double camWidth = middleW * 0.9;
+    final double camHeight = max(
+      220.0,
+      size.height * (isSmall ? 0.55 : 0.48),
+    );
+
+    // Üstte biraz boşluk
+    final double topPad = 16.0;
+    double camX = sideW + (middleW - camWidth) / 2;
+    double camY = topPad;
+    // Taşmaması için sınırla
+    if (camY + camHeight > size.height - 16) {
+      camY = max(8, size.height - camHeight - 16);
+    }
+
+    _cameraArea = Rect.fromLTWH(camX, camY, camWidth, min(camHeight, size.height - camY - 8));
+
+    // Joystick alanlarını tüm yükseklik boyunca ver (kamera ile çakışma zaten kontrol ediliyor)
+    _leftJoystickArea  = Rect.fromLTWH(0, 0, sideW, size.height);
+    _rightJoystickArea = Rect.fromLTWH(size.width - sideW, 0, sideW, size.height);
   }
+  // ----------------------------------------------------------
 
   bool _isInJoystickArea(Offset position) {
-    if (_cameraArea != null && _cameraArea!.contains(position)) {
-      return false;
-    }
-    return (_leftJoystickArea?.contains(position) ?? false) || (_rightJoystickArea?.contains(position) ?? false);
+    if (_cameraArea != null && _cameraArea!.contains(position)) return false;
+    return (_leftJoystickArea?.contains(position) ?? false) ||
+        (_rightJoystickArea?.contains(position) ?? false);
   }
 
   void _sendData() {
@@ -125,7 +142,6 @@ class _ManuelKontrolState extends State<ManuelKontrol> {
     double forwardBackward = 0;
     double leftRight = 0;
 
-    // Joystick kullanılmıyorsa yine de brush komutlarını DAİMA gönder!
     bool validTouchExists = false;
     _touchCurrentPoints.forEach((pointer, currentPosition) {
       final start = _touchStartPoints[pointer];
@@ -142,17 +158,17 @@ class _ManuelKontrolState extends State<ManuelKontrol> {
     forwardBackward = forwardBackward.clamp(-1.0, 1.0);
     leftRight = leftRight.clamp(-1.0, 1.0);
 
-    int scaledForwardBackward = (forwardBackward * _speed).toInt();
-    int scaledLeftRight = (leftRight * _speed).toInt();
+    final int scaledForwardBackward = (forwardBackward * _speed).toInt();
+    final int scaledLeftRight = (leftRight * _speed).toInt();
 
-    Map<String, dynamic> messageMap = {
+    final messageMap = {
       "joystick_forward": validTouchExists ? scaledForwardBackward : 0,
       "joystick_turn": validTouchExists ? scaledLeftRight : 0,
       "brush1": _isBrush1On ? 1 : 0,
       "brush2": _isBrush2On ? 1 : 0,
       "ts": DateTime.now().millisecondsSinceEpoch,
     };
-    String message = jsonEncode(messageMap);
+    final message = jsonEncode(messageMap);
     _udpSocket!.send(utf8.encode(message), InternetAddress(_targetIP), _targetPort);
   }
 
@@ -167,105 +183,83 @@ class _ManuelKontrolState extends State<ManuelKontrol> {
 
   @override
   Widget build(BuildContext context) {
-    final size = MediaQuery.of(context).size;
-    _calculateAreas(size);
-
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Manuel Kontrol'),
+      appBar: AppBar(title: const Text('Manuel Kontrol')),
+      body: LayoutBuilder(
+        builder: (context, constraints) {
+          final area = Size(constraints.maxWidth, constraints.maxHeight);
+          _calculateAreas(area);
+          return Stack(
+            children: [
+              if (_cameraImageBytes != null)
+                Positioned(
+                  left: _cameraArea!.left,
+                  top: _cameraArea!.top,
+                  width: _cameraArea!.width,
+                  height: _cameraArea!.height,
+                  child: Image.memory(
+                    _cameraImageBytes!,
+                    fit: BoxFit.contain,
+                    gaplessPlayback: true,
+                  ),
+                ),
+              _buildJoystickLayer(area),
+            ],
+          );
+        },
       ),
-      body: Column(
-        children: [
-          Expanded(
-            child: Stack(
-              children: [
-                if (_cameraImageBytes != null)
-                  Positioned(
-                    left: _cameraArea!.left,
-                    top: _cameraArea!.top,
-                    width: _cameraArea!.width,
-                    height: _cameraArea!.height,
-                    child: Image.memory(
-                      _cameraImageBytes!,
-                      fit: BoxFit.contain,
-                      gaplessPlayback: true,
+      bottomNavigationBar: SafeArea(
+        top: false,
+        child: Container(
+          padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
+          decoration: BoxDecoration(
+            color: Theme.of(context).colorScheme.surface,
+            boxShadow: const [BoxShadow(blurRadius: 8, offset: Offset(0, -2), color: Colors.black26)],
+          ),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+            children: [
+              Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const Text("Ön Fırça", style: TextStyle(fontWeight: FontWeight.bold)),
+                  Switch(value: _isBrush1On, onChanged: (v) => setState(() => _isBrush1On = v)),
+                ],
+              ),
+              Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const Text('Hız Limiti'),
+                  SizedBox(
+                    width: 160,
+                    child: Slider(
+                      value: _speed, min: 10, max: 100, divisions: 9,
+                      label: '${_speed.round()}%',
+                      onChanged: (v) => setState(() => _speed = v),
                     ),
                   ),
-                _buildJoystickLayer(size),
-                Positioned(
-                  bottom: 16,
-                  right: 16,
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.end,
+                  Text('Seçili: ${_speed.round()}%', style: const TextStyle(fontSize: 12)),
+                  const SizedBox(height: 4),
+                  Row(
+                    mainAxisSize: MainAxisSize.min,
                     children: [
-                      Text('FPS: $_fps', style: const TextStyle(color: Colors.white, fontSize: 16)),
-                      Text('Gecikme: $_latencyMs ms', style: const TextStyle(color: Colors.white, fontSize: 16)),
+                      Text('FPS: $_fps', style: const TextStyle(fontSize: 12)),
+                      const SizedBox(width: 12),
+                      Text('Gecikme: $_latencyMs ms', style: const TextStyle(fontSize: 12)),
                     ],
                   ),
-                ),
-              ],
-            ),
+                ],
+              ),
+              Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const Text("Arka Fırça", style: TextStyle(fontWeight: FontWeight.bold)),
+                  Switch(value: _isBrush2On, onChanged: (v) => setState(() => _isBrush2On = v)),
+                ],
+              ),
+            ],
           ),
-          Padding(
-            padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 24),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-              crossAxisAlignment: CrossAxisAlignment.center,
-              children: [
-                Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    const Text("Ön Fırça", style: TextStyle(fontWeight: FontWeight.bold)),
-                    Switch(
-                      value: _isBrush1On,
-                      onChanged: (value) {
-                        setState(() {
-                          _isBrush1On = value;
-                        });
-                      },
-                    ),
-                  ],
-                ),
-                Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    const Text('Hız Limiti', style: TextStyle(color: Colors.white, fontSize: 16)),
-                    SizedBox(
-                      width: 160,
-                      child: Slider(
-                        value: _speed,
-                        min: 10,
-                        max: 100,
-                        divisions: 9,
-                        label: '${_speed.round()}%',
-                        onChanged: (value) {
-                          setState(() {
-                            _speed = value;
-                          });
-                        },
-                      ),
-                    ),
-                    Text('Seçili: ${_speed.round()}%', style: const TextStyle(color: Colors.white, fontSize: 14)),
-                  ],
-                ),
-                Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    const Text("Arka Fırça", style: TextStyle(fontWeight: FontWeight.bold)),
-                    Switch(
-                      value: _isBrush2On,
-                      onChanged: (value) {
-                        setState(() {
-                          _isBrush2On = value;
-                        });
-                      },
-                    ),
-                  ],
-                ),
-              ],
-            ),
-          ),
-        ],
+        ),
       ),
     );
   }
@@ -321,13 +315,9 @@ class _ManuelKontrolState extends State<ManuelKontrol> {
     final dx = current.dx - center.dx;
     final dy = current.dy - center.dy;
     final distance = sqrt(dx * dx + dy * dy);
-
     if (distance > maxDistance) {
       final angle = atan2(dy, dx);
-      return Offset(
-        center.dx + maxDistance * cos(angle),
-        center.dy + maxDistance * sin(angle),
-      );
+      return Offset(center.dx + maxDistance * cos(angle), center.dy + maxDistance * sin(angle));
     } else {
       return current;
     }
@@ -349,10 +339,11 @@ class JoystickPainter extends CustomPainter {
 
   @override
   void paint(Canvas canvas, Size size) {
-    final greenPaint = Paint()..color = Colors.green.withOpacity(0.3);
+    final greenPaint = Paint()..color = Colors.green.withOpacity(0.25);
     final yellowPaint = Paint()..color = Colors.yellow.withOpacity(0.5);
     final orangePaint = Paint()..color = Colors.orange;
 
+    // Geniş joystick alanları
     canvas.drawRect(leftJoystickArea, greenPaint);
     canvas.drawRect(rightJoystickArea, greenPaint);
 
