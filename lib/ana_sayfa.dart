@@ -61,6 +61,20 @@ class _AnaSayfaState extends State<AnaSayfa> {
                 Navigator.pop(context);
               },
             ),
+
+            // --- YENİ EKLENDİ: Tek Joystick (Spawn) sayfasına geçiş ---
+            ListTile(
+              leading: const Icon(Icons.sports_esports),
+              title: const Text('Tek Joystick'),
+              onTap: () {
+                // Önce çekmeceyi kapat
+                Navigator.pop(context);
+                // Ardından yeni sayfayı route üzerinden aç
+                Navigator.of(context).pushNamed('/tek-joystick-spawn');
+              },
+            ),
+            // --- YENİ BÖLÜM SONU ---
+
             ListTile(
               leading: const Icon(Icons.settings),
               title: const Text('Ayarlar'),

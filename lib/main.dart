@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+
 import 'camera_service.dart';
-import 'ana_sayfa.dart'; // senin ana menü sayfanın dosyası
+import 'ana_sayfa.dart'; // senin ana menü sayfan
+import 'tek_joystick_spawn.dart'; // Tek joystick sayfası
 
 void main() {
   runApp(
@@ -22,8 +24,13 @@ class MyApp extends StatelessWidget {
     return MaterialApp(
       debugShowCheckedModeBanner: false,
       title: 'SCS App',
-      theme: ThemeData.dark(), // İstersen light yapabilirsin
-      home: const AnaSayfa(), // Senin ana ekranın
+      theme: ThemeData.dark(),
+      home: const AnaSayfa(),
+      // >>> DEĞİŞİKLİK: Yeni rota eklendi
+      routes: {
+        '/tek-joystick-spawn': (context) => const TekJoystickSpawnPage(),
+      },
+      // <<< DEĞİŞİKLİK
     );
   }
 }

@@ -107,7 +107,7 @@ class _ManuelKontrolState extends State<ManuelKontrol> {
     final double middleW = size.width - (2 * sideW);
 
     // Kamera boyutu: orta şeridin %90'ı kadar genişlik, yükseklik ekranın ~%55'i (küçük ekranda daha büyük)
-    final double camWidth = middleW * 0.9;
+    final double camWidth = middleW * 1;
     final double camHeight = max(
       220.0,
       size.height * (isSmall ? 0.55 : 0.48),
