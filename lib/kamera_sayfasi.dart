@@ -6,6 +6,7 @@ import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
+
 import 'camera_service.dart';
 
 class KameraSayfasi extends StatefulWidget {
@@ -36,23 +37,26 @@ class _KameraSayfasiState extends State<KameraSayfasi> {
   RawDatagramSocket? _udpSocket;
   Timer? _sendTimer; // 20 Hz heartbeat
 
-  // Eksen değerleri [-1, 1] (hız çarpanı uygulanacak)
-  double _joyForward = 0.0; // ileri(+) / geri(-)
-  double _joyTurn = 0.0;    // sağ(+) / sol(-)
+  // Eksen değerleri (iç hesap)
+  double _joyForward = 0.0; // ileri(+) / geri(-)  [-1..1]
+  double _joyTurn = 0.0;    // sağ(+) / sol(-)     [-1..1]
+
+  // SABİT HIZ: %50
+  static const int _speedPct = 50; // INT gönderimde kullanılacak
+
+  // WASD & Ok tuşları tutma durumları
+  bool _w = false, _s = false, _a = false, _d = false;
+  bool _up = false, _down = false, _left = false, _right = false;
+
+  // Fırçalar
   bool _brush1 = false;
   bool _brush2 = false;
 
-  // Hız çarpanı (slider ile ayarlanır)
-  double _speedFactor = 0.5; // 0.1 .. 1.0
-
-  // Basılı tutma durumları
-  bool _w = false, _s = false, _a = false, _d = false;
-
-  // Toggle'lar için kenar tespit (tekrarlı keydown spam'ini engeller)
+  // Numpad 1/2 edge detect
   bool _np1WasDown = false;
   bool _np2WasDown = false;
 
-  // RawKeyboard için odak
+  // Klavye olayları için odak
   final FocusNode _focusNode = FocusNode();
 
   @override
@@ -63,7 +67,6 @@ class _KameraSayfasiState extends State<KameraSayfasi> {
     _startUdp();
     _startHeartbeat();
 
-    // Klavye event'lerini almak için odak iste
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted) _focusNode.requestFocus();
     });
@@ -108,9 +111,7 @@ class _KameraSayfasiState extends State<KameraSayfasi> {
       final frameLength =
       ByteData.sublistView(lengthBytes).getUint32(0, Endian.big);
 
-      if (_buffer.length < 4 + frameLength) {
-        break;
-      }
+      if (_buffer.length < 4 + frameLength) break;
 
       final frameData = _buffer.sublist(4, 4 + frameLength);
       _buffer.removeRange(0, 4 + frameLength);
@@ -164,28 +165,32 @@ class _KameraSayfasiState extends State<KameraSayfasi> {
   void _startHeartbeat() {
     _sendTimer?.cancel();
     _sendTimer = Timer.periodic(const Duration(milliseconds: 50), (_) {
-      _recomputeAxesFromKeys(); // hız çarpanı burada uygulanır
+      _recomputeAxesFromKeys();
       _sendUdp();
     });
   }
 
   void _recomputeAxesFromKeys() {
-    // Dijital WASD -> eksen
-    final fRaw = (_w ? 1.0 : 0.0) + (_s ? -1.0 : 0.0);
-    final tRaw = (_d ? 1.0 : 0.0) + (_a ? -1.0 : 0.0);
+    // Dijital WASD & Ok tuşları -> eksen toplamı
+    final fRaw = (_w || _up ? 1.0 : 0.0) + (_s || _down ? -1.0 : 0.0);
+    final tRaw = (_d || _right ? 1.0 : 0.0) + (_a || _left ? -1.0 : 0.0);
 
-    // Hız çarpanı uygula ve sınırla
-    _joyForward = (fRaw.clamp(-1.0, 1.0) * _speedFactor).clamp(-1.0, 1.0);
-    _joyTurn = (tRaw.clamp(-1.0, 1.0) * _speedFactor).clamp(-1.0, 1.0);
+    // [-1..1] sınırla
+    _joyForward = fRaw.clamp(-1.0, 1.0);
+    _joyTurn = tRaw.clamp(-1.0, 1.0);
   }
 
   void _sendUdp() {
     if (_udpSocket == null) return;
 
+    // INT gönder: -50..+50 (sabit %50 hız)
+    final int forwardInt = (_joyForward * _speedPct).round();
+    final int turnInt = (_joyTurn * _speedPct).round();
+
     final payload = <String, dynamic>{
       'ts': DateTime.now().millisecondsSinceEpoch,
-      'joystick_forward': _joyForward,
-      'joystick_turn': _joyTurn,
+      'joystick_forward': forwardInt,
+      'joystick_turn': turnInt,
       'brush1': _brush1 ? 1 : 0,
       'brush2': _brush2 ? 1 : 0,
     };
@@ -199,31 +204,33 @@ class _KameraSayfasiState extends State<KameraSayfasi> {
     final isDown = event is RawKeyDownEvent;
     final key = event.logicalKey;
 
-    // WASD tutma durumları
+    // WASD
     if (key == LogicalKeyboardKey.keyW) _w = isDown;
     if (key == LogicalKeyboardKey.keyS) _s = isDown;
     if (key == LogicalKeyboardKey.keyA) _a = isDown;
     if (key == LogicalKeyboardKey.keyD) _d = isDown;
 
-    // Numpad 1 -> brush1 toggle (edge detect)
+    // Ok tuşları
+    if (key == LogicalKeyboardKey.arrowUp) _up = isDown;
+    if (key == LogicalKeyboardKey.arrowDown) _down = isDown;
+    if (key == LogicalKeyboardKey.arrowLeft) _left = isDown;
+    if (key == LogicalKeyboardKey.arrowRight) _right = isDown;
+
+    // Numpad 1 -> brush1 toggle
     if (key == LogicalKeyboardKey.numpad1) {
-      if (isDown && !_np1WasDown) {
-        _brush1 = !_brush1;
-      }
+      if (isDown && !_np1WasDown) _brush1 = !_brush1;
       _np1WasDown = isDown;
     }
 
-    // Numpad 2 -> brush2 toggle (edge detect)
+    // Numpad 2 -> brush2 toggle
     if (key == LogicalKeyboardKey.numpad2) {
-      if (isDown && !_np2WasDown) {
-        _brush2 = !_brush2;
-      }
+      if (isDown && !_np2WasDown) _brush2 = !_brush2;
       _np2WasDown = isDown;
     }
 
-    // Bırakmalarda eksenleri hemen güncelle (tepki hızlı kalsın)
+    // Anında eksenleri güncelle
     _recomputeAxesFromKeys();
-    setState(() {}); // UI’daki slider/etiketler anlık güncellensin
+    setState(() {});
   }
 
   @override
@@ -270,65 +277,23 @@ class _KameraSayfasiState extends State<KameraSayfasi> {
                     : const Text('Kamera bağlantısı kurulamadı'),
               ),
             ),
-
             const SizedBox(height: 10),
-
-            // Alt panel: FPS, Gecikme, Hız slider
+            // Alt panel: FPS, Gecikme, Sabit hız etiketi
             Expanded(
               flex: 1,
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  // FPS / Gecikme
                   Row(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
-                      Text(
-                        'FPS: ${cameraService.fps}',
-                        style: const TextStyle(fontSize: 18),
-                      ),
+                      Text('FPS: ${cameraService.fps}', style: const TextStyle(fontSize: 18)),
                       const SizedBox(width: 24),
-                      Text(
-                        'Gecikme: ${cameraService.latencyMs} ms',
-                        style: const TextStyle(fontSize: 18),
-                      ),
+                      Text('Gecikme: ${cameraService.latencyMs} ms', style: const TextStyle(fontSize: 18)),
                     ],
                   ),
                   const SizedBox(height: 8),
-
-                  // Hız Slider
-                  SizedBox(
-                    width: MediaQuery.of(context).size.width * 0.85,
-                    child: Row(
-                      children: [
-                        const Text('Hız', style: TextStyle(fontSize: 16)),
-                        Expanded(
-                          child: Slider(
-                            value: _speedFactor,
-                            min: 0.1,
-                            max: 1.0,
-                            divisions: 9,
-                            label: '${(_speedFactor * 100).round()}%',
-                            onChanged: (v) {
-                              setState(() {
-                                _speedFactor = v;
-                              });
-                              // Anlık eksenleri hızla yeniden hesapla
-                              _recomputeAxesFromKeys();
-                            },
-                          ),
-                        ),
-                        SizedBox(
-                          width: 56,
-                          child: Text(
-                            '${(_speedFactor * 100).round()}%',
-                            textAlign: TextAlign.right,
-                            style: const TextStyle(fontSize: 14),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
+                  const Text('Hız: %50 (int gönderim -50..+50)'),
                 ],
               ),
             ),
